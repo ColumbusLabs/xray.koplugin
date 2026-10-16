@@ -470,12 +470,12 @@ Chapters in this Batch: %s
 TASK: Analyze the provided sequential batch of chapters in order.
 For EACH chapter in the batch, identify:
 1. NEW entities introduced in that chapter (characters, locations, terms).
-2. DELTA UPDATES (state transitions) for existing known entities IF AND ONLY IF their role, status, allegiance, or narrative condition underwent a substantive, lasting transformation.
+2. DELTA UPDATES (state transitions) for existing known entities (from the manifest OR introduced in an earlier chapter of this batch) IF AND ONLY IF their role, status, allegiance, or narrative condition underwent a substantive, lasting transformation.
 3. TIMELINE EVENT: A concise summary of the primary plot events occurring in that chapter.
 
 Output ONLY a valid JSON object matching the required schema.
 
-EXISTING KNOWN ENTITIES MANIFEST (Do NOT re-extract unless their role, status, or description evolved significantly):
+EXISTING KNOWN ENTITIES MANIFEST (from prior batches - do NOT re-extract unless their role, status, or description evolved significantly):
 %s
 
 RULES:
@@ -514,7 +514,7 @@ REQUIRED JSON FORMAT:
       ],
       "character_state_updates": [
         {
-          "name": "Name matching known manifest",
+          "name": "Name matching known manifest or character introduced in earlier chapter of this batch",
           "role": "Updated narrative role / importance (e.g. Protagonist, Partner, Antagonist, Secondary Character, etc.)",
           "status": "alive",
           "change": "One short sentence naming what changed since the previous state (e.g. 'Promoted to partner after the Shacklewell case')",
@@ -531,7 +531,7 @@ REQUIRED JSON FORMAT:
       ],
       "location_state_updates": [
         {
-          "name": "Name matching known manifest",
+          "name": "Name matching known manifest or location introduced in earlier chapter of this batch",
           "change": "One short sentence naming what changed (e.g. 'Destroyed during the battle of Oakhaven')",
           "description": "Updated description",
           "evidence": "Brief excerpt"
@@ -546,7 +546,7 @@ REQUIRED JSON FORMAT:
       ],
       "term_state_updates": [
         {
-          "name": "Name matching known manifest",
+          "name": "Name matching known manifest or term introduced in earlier chapter of this batch",
           "change": "One short sentence naming what changed in understanding or usage",
           "description": "Updated definition",
           "evidence": "Brief excerpt"

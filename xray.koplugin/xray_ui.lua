@@ -2445,7 +2445,7 @@ function M:showEvolutionSettings()
     local enabled_text = (self.loc and self.loc:t("evolution_enabled")) or "Enabled"
     local disabled_text = (self.loc and self.loc:t("evolution_disabled")) or "Disabled"
     XRaySettingsCard.show(self, {
-        title = (self.loc and self.loc:t("menu_evolution_settings")) or "Evolution Settings",
+        title = (self.loc and self.loc:t("menu_evolution_settings")) or "Story Arc Settings",
         options = {
             { text = enabled_text, value = true },
             { text = disabled_text, value = false },
@@ -2461,7 +2461,7 @@ function M:showEvolutionSettings()
             end
             UIManager:setDirty(nil, "ui")
         end,
-        about_text = (self.loc and self.loc:t("evolution_setting_desc")) or "Entity Evolution tracks how characters, locations, and terms evolve across chapters and milestones.\n\nDisabling this will hide the Evolution button from lookup popups and detail dialogs.",
+        about_text = (self.loc and self.loc:t("evolution_setting_desc")) or "Story Arc tracks how characters, locations, and terms evolve across chapters and milestones.\n\nDisabling this will hide the Story Arc button from lookup popups and detail dialogs.",
     })
 end
 
@@ -3172,6 +3172,12 @@ function M:startFullBookPreGeneration()
             ch.toc_index = i
             table.insert(narrative_chapters, ch)
         end
+    end
+
+    local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
+    local total_pages = self.ui and self.ui.document and self.ui.document.getPageCount and self.ui.document:getPageCount() or 0
+    if ChapterAnalyzer and ChapterAnalyzer.expandOversizedTocChapters then
+        narrative_chapters = ChapterAnalyzer:expandOversizedTocChapters(narrative_chapters, total_pages, 25)
     end
 
     if #narrative_chapters == 0 then

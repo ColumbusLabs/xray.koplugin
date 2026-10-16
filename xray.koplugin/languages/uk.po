@@ -481,11 +481,11 @@ msgstr "Вимкнено"
 msgid "evolution_enabled"
 msgstr "Увімкнено"
 
-# en-hash: 9e36ccf6e8d3b28c86daf8e46738bc66
+# en-hash: a60a71af2508ebb8958b115204d602f8
 msgid "evolution_setting_desc"
 msgstr "Еволюція сутностей відстежує зміни персонажів, локацій і термінів по розділах та ключових моментах.\n\nВимкнення цієї опції сховає кнопку еволюції у спливаючих вікнах пошуку та деталях."
 
-# en-hash: 95e7f1c28cb4d6a321b37bced446fb79
+# en-hash: 8a193135a3bc4b4998dfc09f31602b3f
 msgid "evolution_title"
 msgstr "Еволюція"
 
@@ -957,7 +957,7 @@ msgstr "Ввести свою модель..."
 msgid "menu_entity_ui_mode"
 msgstr "Стиль опису об'єктів"
 
-# en-hash: 55cdb3e13f43fa87d7f833d3ef34887c
+# en-hash: 54c388986a89f527cc5cbdcde63a7c61
 msgid "menu_evolution_settings"
 msgstr "Налаштування еволюції"
 

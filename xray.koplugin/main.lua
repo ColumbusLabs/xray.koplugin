@@ -415,6 +415,26 @@ function XRayPlugin:_getFlatToc()
     return self._cached_toc
 end
 
+function XRayPlugin:onLowMemory()
+    self:log("XRayPlugin: onLowMemory received. Releasing caches.")
+    if self.clearTileCaches then
+        pcall(function() self:clearTileCaches() end)
+    end
+    if self.clearSpineCache then
+        pcall(function() self:clearSpineCache() end)
+    end
+    self._cached_toc = nil
+    local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
+    if ChapterAnalyzer and ChapterAnalyzer.clearCache then
+        pcall(function() ChapterAnalyzer:clearCache() end)
+    end
+    if self.is_sequential_scan_active then
+        self:log("XRayPlugin: Halting background sequential prefetch due to low memory event.")
+        self.active_sequential_cancelled = true
+    end
+    collectgarbage("collect")
+end
+
 function XRayPlugin:onReaderReady()
     self._cached_toc = nil
     self:clearPendingBackgroundFetch()
@@ -694,6 +714,7 @@ function XRayPlugin:scheduleBackgroundCatchUp(delay)
 
         -- Busy check: defer if another AI request or unit scan is running
         if self.bg_fetch_pending or self.bg_fetch_active or self._unit_scan_in_progress
+                or self.is_sequential_scan_active
                 or self._active_ai_cancel or (self.ai_helper and self.ai_helper._async_child_pid) then
             self:scheduleBackgroundCatchUp(10)
             return
@@ -762,21 +783,34 @@ end
 
 function XRayPlugin:checkPrefetchHorizon()
     if self.destroyed or not self.ui or not self.ui.document then return end
+    if self.is_sequential_scan_active then return end
     local horizon = self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.prefetch_horizon_chapters or 0
     if horizon <= 0 then return end
     if not self.ai_helper or not self.ai_helper.hasApiKey or not self.ai_helper:hasApiKey() then return end
 
     local cur_page = self.getCurrentDocPage and self:getCurrentDocPage() or (self.ui.getCurrentPage and self.ui:getCurrentPage()) or 1
-    local cur_chap_idx = self.getCurrentChapterIndex and self:getCurrentChapterIndex(cur_page) or 1
 
     local toc = self:_getFlatToc()
     if not toc or #toc == 0 then return end
 
+    local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
+    local total_pages = self.ui and self.ui.document and self.ui.document.getPageCount and self.ui.document:getPageCount() or 0
+    local expanded_toc = (ChapterAnalyzer and ChapterAnalyzer.expandOversizedTocChapters) and ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, 25) or toc
+
+    local cur_chap_idx = 1
+    for i, ch in ipairs(expanded_toc) do
+        if ch.page and ch.page <= cur_page then
+            cur_chap_idx = i
+        else
+            break
+        end
+    end
+
     local target_chapters = {}
-    local end_idx = math.min(#toc, cur_chap_idx + horizon)
+    local end_idx = math.min(#expanded_toc, cur_chap_idx + horizon)
     for i = cur_chap_idx + 1, end_idx do
-        local ch = toc[i]
-        if ch and not (self.isNonNarrativeChapter and self:isNonNarrativeChapter(ch.title or "")) then
+        local ch = expanded_toc[i]
+        if ch and not (self.isNonNarrativeChapter and self:isNonNarrativeChapter(ch.title or ch.parent_title or "")) then
             ch.toc_index = i
             local unique_id = (ch.title or ("Chapter " .. tostring(i))) .. "_" .. tostring(ch.page)
             self.chapters_fetched = self.chapters_fetched or {}
@@ -874,7 +908,7 @@ function XRayPlugin:onPageUpdate(pageno)
                 end
                 chapter_title = chapter_title or ("Page " .. tostring(pageno))
 
-                if not (self.bg_fetch_pending or self.bg_fetch_active) then
+                if not (self.bg_fetch_pending or self.bg_fetch_active or self.is_sequential_scan_active) then
                     self.bg_fetch_pending = true
                     self:clearChapterFetchTimer()
                     local cb
@@ -901,7 +935,7 @@ function XRayPlugin:onPageUpdate(pageno)
         self.last_bg_fetch_page = pageno
 
         -- Debounce: ignore if a fetch is already scheduled or active
-        if self.bg_fetch_pending or self.bg_fetch_active then 
+        if self.bg_fetch_pending or self.bg_fetch_active or self.is_sequential_scan_active then 
             self:log("XRayPlugin: Fetch already pending or active. Debouncing Ultra mode trigger.")
             return 
         end
@@ -1027,7 +1061,7 @@ function XRayPlugin:onPageUpdate(pageno)
     self.last_auto_chapter = unique_id
 
     -- Debounce: ignore if a fetch is already scheduled
-    if self.bg_fetch_pending or self.bg_fetch_active then 
+    if self.bg_fetch_pending or self.bg_fetch_active or self.is_sequential_scan_active then 
         return 
     end
     self.bg_fetch_pending = true
@@ -1056,7 +1090,7 @@ function XRayPlugin:triggerBackgroundMergeFetch(chapter_title)
         end)
         return
     end
-    if self.bg_fetch_active then return end
+    if self.bg_fetch_active or self.is_sequential_scan_active then return end
     if not self.ui or not self.ui.document then return end
 
 
@@ -1071,7 +1105,7 @@ function XRayPlugin:triggerBackgroundMergeFetch(chapter_title)
         -- Foreground requests own the single async child slot and its global
         -- cancel handler. Do not consume the background cooldown or disturb
         -- that ownership while one is active.
-        if self._active_ai_cancel or (self.ai_helper and self.ai_helper._async_child_pid) then
+        if self._active_ai_cancel or (self.ai_helper and self.ai_helper._async_child_pid) or self.is_sequential_scan_active then
             self:log("XRayPlugin: Skipping background fetch because another AI request is active")
             return
         end
@@ -1532,7 +1566,7 @@ function XRayPlugin:getSubMenuItems()
                         callback = function() self:showMentionsSettings() end,
                     },
                     {
-                        text = self.loc:t("menu_evolution_settings") or "Evolution Settings",
+                        text = self.loc:t("menu_evolution_settings") or "Story Arc Settings",
                         keep_menu_open = true,
                         callback = function() self:showEvolutionSettings() end,
                     },

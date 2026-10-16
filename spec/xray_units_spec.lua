@@ -1034,4 +1034,34 @@ describe("xray_units", function()
         end)
     end)
 
+    describe("getRuleFingerprint", function()
+        it("returns a deterministic hex string", function()
+            local cats = { length = true, weight = true, temp = true, volume = true, speed = true, area = true }
+            local fp1 = xray_units.getRuleFingerprint("to_metric", cats, "en", true)
+            local fp2 = xray_units.getRuleFingerprint("to_metric", cats, "en", true)
+            assert.is_string(fp1)
+            assert.are.equal(fp1, fp2)
+            assert.is_true(#fp1 > 0)
+        end)
+
+        it("produces different fingerprints for different categories or directions", function()
+            local cats_all = { length = true, weight = true, temp = true, volume = true, speed = true, area = true }
+            local cats_no_area = { length = true, weight = true, temp = true, volume = true, speed = true, area = false }
+            local fp_all = xray_units.getRuleFingerprint("to_metric", cats_all, "en", true)
+            local fp_no_area = xray_units.getRuleFingerprint("to_metric", cats_no_area, "en", true)
+            local fp_imp = xray_units.getRuleFingerprint("to_imperial", cats_all, "en", true)
+
+            assert.are_not.equal(fp_all, fp_no_area)
+            assert.are_not.equal(fp_all, fp_imp)
+        end)
+
+        it("produces different fingerprints for different languages", function()
+            local cats = { length = true, weight = true, temp = true, volume = true, speed = true, area = true }
+            local fp_en = xray_units.getRuleFingerprint("to_metric", cats, "en", true)
+            local fp_uk = xray_units.getRuleFingerprint("to_metric", cats, "uk", true)
+            assert.are_not.equal(fp_en, fp_uk)
+        end)
+    end)
+
 end)
+

@@ -728,6 +728,65 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui, max_page)
     return #annotations_text > 0 and annotations_text or nil
 end
 
+-- Subdivide oversized TOC entries (e.g. books with only "Parts" like Carrie, or chapters > 25 pages)
+-- into granular virtual segments for sequential Story Arc prefetching.
+function ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, max_pages_per_segment)
+    if not toc or #toc == 0 then return {} end
+    max_pages_per_segment = max_pages_per_segment or 25
+    total_pages = total_pages or 0
+
+    local expanded = {}
+    local global_toc_index = 1
+
+    for i, ch in ipairs(toc) do
+        local next_page = nil
+        for j = i + 1, #toc do
+            if toc[j] and toc[j].page and toc[j].page > (ch.page or 0) then
+                next_page = toc[j].page
+                break
+            end
+        end
+        if not next_page and total_pages > (ch.page or 0) then
+            next_page = total_pages + 1
+        end
+
+        local page_span = (ch.page and next_page and next_page > ch.page) and (next_page - ch.page) or 0
+        if page_span > max_pages_per_segment then
+            local num_parts = math.ceil(page_span / max_pages_per_segment)
+            local pages_per_part = math.ceil(page_span / num_parts)
+            for part = 1, num_parts do
+                local seg_start = ch.page + (part - 1) * pages_per_part
+                local seg_end = math.min(next_page - 1, seg_start + pages_per_part - 1)
+                local sub_ch = {
+                    title = string.format("%s (%d/%d)", ch.title or "Chapter", part, num_parts),
+                    parent_title = ch.title,
+                    page = seg_start,
+                    end_page = seg_end,
+                    toc_index = global_toc_index,
+                    depth = ch.depth,
+                    is_virtual_segment = true,
+                    xpointer = (part == 1 and ch.xpointer) or nil,
+                }
+                table.insert(expanded, sub_ch)
+                global_toc_index = global_toc_index + 1
+            end
+        else
+            local cloned = {
+                title = ch.title,
+                page = ch.page,
+                end_page = next_page and (next_page - 1) or nil,
+                toc_index = global_toc_index,
+                depth = ch.depth,
+                xpointer = ch.xpointer,
+            }
+            table.insert(expanded, cloned)
+            global_toc_index = global_toc_index + 1
+        end
+    end
+
+    return expanded
+end
+
 -- Get bounded text for a single chapter (#150 & #131 sequential pipeline)
 function ChapterAnalyzer:getSingleChapterText(ui, chapter, next_chapter, current_page, max_len)
     if not ui or not ui.document or not chapter then return "" end
@@ -735,11 +794,17 @@ function ChapterAnalyzer:getSingleChapterText(ui, chapter, next_chapter, current
 
     -- If reader is inside this chapter and spoiler protection is needed, strictly truncate to current page
     if current_page and chapter.page and chapter.page <= current_page then
-        local next_page = next_chapter and next_chapter.page
+        local next_page = chapter.end_page or (next_chapter and next_chapter.page)
         if not next_page or next_page > current_page then
             local end_page = self:getEndPageForCurrentPage(ui, current_page)
             return self:getTextFromPageRange(ui, chapter.page, end_page, max_len) or ""
         end
+    end
+
+    -- Explicit page bounds (e.g. virtual segment from expandOversizedTocChapters)
+    if chapter.end_page and chapter.page then
+        local txt = self:getTextFromPageRange(ui, chapter.page, chapter.end_page, max_len)
+        if txt and #txt > 0 then return txt end
     end
 
     -- Reflowable document: extract bounded range between XPointers
@@ -759,7 +824,7 @@ function ChapterAnalyzer:getSingleChapterText(ui, chapter, next_chapter, current
 
     -- Fallback to page range
     if chapter.page then
-        local end_page = next_chapter and next_chapter.page and (next_chapter.page - 1)
+        local end_page = chapter.end_page or (next_chapter and next_chapter.page and (next_chapter.page - 1))
         if not end_page or end_page < chapter.page then end_page = chapter.page + 30 end
         local txt = self:getTextFromPageRange(ui, chapter.page, end_page, max_len)
         if txt and #txt > 0 then return txt end

@@ -571,6 +571,18 @@ function M:_getUnitCachePath(resolved_dir)
     return sidecar .. "/xray_unit_cache_" .. resolved_dir .. ".cache"
 end
 
+local function _getEffectiveLang(self)
+    local doc = self.ui and self.ui.document
+    if doc and doc.getProps then
+        local ok, props = pcall(doc.getProps, doc)
+        if ok and type(props) == "table" and props.language and props.language ~= "" then
+            return tostring(props.language):lower():gsub("_", "-"):match("^[a-z]+") or "en"
+        end
+    end
+    local ui_lang = self.loc and self.loc:getLanguage() or "en"
+    return tostring(ui_lang):lower():gsub("_", "-"):match("^[a-z]+") or "en"
+end
+
 local function _getSettingsSignature(self, settings)
     local cat_l = settings.unit_cat_length ~= false
     local cat_w = settings.unit_cat_weight ~= false
@@ -578,10 +590,23 @@ local function _getSettingsSignature(self, settings)
     local cat_v = settings.unit_cat_volume ~= false
     local cat_s = settings.unit_cat_speed ~= false
     local cat_a = settings.unit_cat_area ~= false
-    return table.concat({
-        "v32",
+    local enabled_cats = {
+        length = cat_l, weight = cat_w, temp = cat_t,
+        volume = cat_v, speed = cat_s, area = cat_a,
+    }
+    local scan_written = settings.unit_scan_written_numbers ~= false
+    local dir = _getResolvedDirection(self)
+    local lang = _getEffectiveLang(self)
+    local rule_fp = xray_units.getRuleFingerprint and xray_units.getRuleFingerprint(dir, enabled_cats, lang, scan_written) or "u1"
+    local cat_sig = table.concat({
         tostring(cat_l), tostring(cat_w), tostring(cat_t),
         tostring(cat_v), tostring(cat_s), tostring(cat_a),
+    }, "|")
+    return table.concat({
+        "u1:" .. rule_fp,
+        cat_sig,
+        (scan_written and "w1" or "w0"),
+        lang,
     }, "|")
 end
 
@@ -604,30 +629,29 @@ function M:loadUnitCache(resolved_dir)
     local current_sig = _getSettingsSignature(self, settings)
     local sig_matches = (signature == current_sig)
 
-    -- Backwards-compatibility for non-Ukrainian books:
-    -- v31 only added Ukrainian unit aliases and numerals. For books in any other
-    -- language, existing v30 caches are 100% valid and should be accepted so users
-    -- don't suffer a full-book re-scan storm on update.
-    if not sig_matches and signature:match("^v30|") then
-        local is_ukrainian = false
-        local doc = self.ui and self.ui.document
-        if doc and doc.getProps then
-            local ok, props = pcall(doc.getProps, doc)
-            if ok and type(props) == "table" and props.language then
-                local l = tostring(props.language):lower():gsub("_", "-")
-                if l:match("^uk") then is_ukrainian = true end
+    -- Backwards-compatibility for legacy signatures (v30, v31, v32):
+    if not sig_matches and signature:match("^v%d+|") then
+        local leg_ver, leg_cats = signature:match("^(v%d+)|(.+)$")
+        local cur_cats = table.concat({
+            tostring(settings.unit_cat_length ~= false),
+            tostring(settings.unit_cat_weight ~= false),
+            tostring(settings.unit_cat_temp ~= false),
+            tostring(settings.unit_cat_volume ~= false),
+            tostring(settings.unit_cat_speed ~= false),
+            tostring(settings.unit_cat_area ~= false),
+        }, "|")
+        if leg_cats == cur_cats then
+            local effective_lang = _getEffectiveLang(self)
+            local lang_affected = false
+            if leg_ver == "v30" and (effective_lang == "uk" or effective_lang == "pl" or effective_lang == "cs" or effective_lang == "sk" or effective_lang == "hu") then
+                lang_affected = true
+            elseif leg_ver == "v31" and (effective_lang == "pl" or effective_lang == "cs" or effective_lang == "sk" or effective_lang == "hu") then
+                lang_affected = true
             end
-        end
-        local ui_lang = self.loc and self.loc:getLanguage() or ""
-        if tostring(ui_lang):lower():match("^uk") then
-            is_ukrainian = true
-        end
 
-        if not is_ukrainian then
-            local v30_expected = current_sig:gsub("^v%d+|", "v30|")
-            if signature == v30_expected then
+            if not lang_affected then
                 sig_matches = true
-                log("loadUnitCache: Accepting legacy v30 cache for non-Ukrainian book.")
+                log("loadUnitCache: Accepting legacy " .. tostring(leg_ver) .. " cache for unaffected language: " .. tostring(effective_lang))
             end
         end
     end

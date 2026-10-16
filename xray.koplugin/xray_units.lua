@@ -1440,6 +1440,68 @@ function M.pluralizeUnit(val, unit)
     return PLURALS[unit] or unit
 end
 
+local ENGLISH_WRITTEN = {
+    quarter = true, half = true, zero = true, one = true, two = true, three = true, four = true, five = true,
+    six = true, seven = true, eight = true, nine = true, ten = true,
+    eleven = true, twelve = true, thirteen = true, fourteen = true, fifteen = true,
+    sixteen = true, seventeen = true, eighteen = true, nineteen = true, twenty = true,
+    thirty = true, forty = true, fifty = true, sixty = true, seventy = true, eighty = true, ninety = true,
+    hundred = true, thousand = true, million = true,
+}
+
+local function _hash_str(str)
+    local hash = 5381
+    for i = 1, #str do
+        hash = (hash * 33 + str:byte(i)) % 4294967296
+    end
+    return string.format("%08x", hash)
+end
+
+function M.getRuleFingerprint(direction, enabled_categories, lang, scan_written)
+    lang = lang or "en"
+    local l_lower = lang:lower():gsub("%-.*$", "")
+    local aliases = M.getScanAliases(direction, enabled_categories, lang)
+    table.sort(aliases)
+
+    local parts = { "dir:", tostring(direction), "lang:", l_lower }
+    for _, a in ipairs(aliases) do
+        table.insert(parts, a)
+        local u = UNIT_LOOKUP[a]
+        if u and u.name then
+            table.insert(parts, u.name .. ":" .. (u.std_target or ""))
+        end
+    end
+
+    if scan_written ~= false then
+        table.insert(parts, "written:")
+        local words = {}
+        if l_lower == "en" then
+            for word in pairs(ENGLISH_WRITTEN) do
+                local val = WRITTEN_NUMBERS[word]
+                if val then
+                    table.insert(words, word .. "=" .. tostring(val))
+                end
+            end
+        else
+            local is_cyrillic = (l_lower == "ru" or l_lower == "uk" or l_lower == "sr" or l_lower == "bg" or l_lower == "be")
+            for word, val in pairs(WRITTEN_NUMBERS) do
+                local word_is_cyrillic = word:match("[\208\209\210]") ~= nil
+                if is_cyrillic and word_is_cyrillic then
+                    table.insert(words, word .. "=" .. tostring(val))
+                elseif not is_cyrillic and not word_is_cyrillic then
+                    table.insert(words, word .. "=" .. tostring(val))
+                end
+            end
+        end
+        table.sort(words)
+        for _, w in ipairs(words) do
+            table.insert(parts, w)
+        end
+    end
+
+    return _hash_str(table.concat(parts, ";"))
+end
+
 M.UNITS = UNITS
 M.UNIT_LOOKUP = UNIT_LOOKUP
 M.applySmartScaling = applySmartScaling
@@ -1450,3 +1512,4 @@ M.EXCLUDED = {
 }
 
 return M
+

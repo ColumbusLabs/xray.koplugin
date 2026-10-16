@@ -363,10 +363,10 @@ msgid "evolution_enabled"
 msgstr "Enabled"
 
 msgid "evolution_setting_desc"
-msgstr "Entity Evolution tracks how characters, locations, and terms evolve across chapters and milestones.\n\nDisabling this will hide the Evolution button from lookup popups and detail dialogs."
+msgstr "Story Arc tracks how characters, locations, and terms evolve across chapters and milestones.\n\nDisabling this will hide the Story Arc button from lookup popups and detail dialogs."
 
 msgid "evolution_title"
-msgstr "evolution_title"
+msgstr "Story Arc: %s"
 
 msgid "extracting_more_characters"
 msgstr "Extracting additional characters..."
@@ -720,7 +720,7 @@ msgid "menu_entity_ui_mode"
 msgstr "Entity Description Style"
 
 msgid "menu_evolution_settings"
-msgstr "Evolution Settings"
+msgstr "Story Arc Settings"
 
 msgid "menu_fetch_author"
 msgstr "Fetch Author Info"

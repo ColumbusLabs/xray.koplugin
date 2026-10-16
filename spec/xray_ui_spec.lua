@@ -1802,9 +1802,9 @@ describe("xray_ui", function()
             end
             f:close()
 
-            -- Signature version 31 + settings categories + 2 entries
+            -- Signature version u1 + rule fingerprint + settings categories + 2 entries
             assert.are.equal(3, #lines)
-            assert.is_true(lines[1]:find("^v32|") ~= nil)
+            assert.is_true(lines[1]:find("^u1:") ~= nil)
             assert.are.equal("xp_1\txp_2\t10 cm\t3.94 inches\tlength", lines[2])
             assert.are.equal("xp_3\txp_4\t100 kg\t220.46  lb\tweight", lines[3])
 
@@ -1837,7 +1837,23 @@ describe("xray_ui", function()
             assert.is_true(loaded_v30)
             assert.are.equal(1, #plugin.unit_xp_matches)
 
+            -- Test backwards-compatibility: v32 cache accepted for non-affected book
+            local fw32 = io.open(cache_file, "w")
+            fw32:write("v32|true|true|true|true|true|true\n")
+            fw32:write("xp_1\txp_2\t10 cm\t3.94 inches\tlength\n")
+            fw32:close()
+
+            plugin.unit_xp_matches = {}
+            local loaded_v32 = plugin:loadUnitCache()
+            assert.is_true(loaded_v32)
+            assert.are.equal(1, #plugin.unit_xp_matches)
+
             -- Test v30 cache rejected for Ukrainian book (forces rebuild)
+            local fw_uk = io.open(cache_file, "w")
+            fw_uk:write("v30|true|true|true|true|true|true\n")
+            fw_uk:write("xp_1\txp_2\t10 cm\t3.94 inches\tlength\n")
+            fw_uk:close()
+
             local orig_getProps = plugin.ui.document.getProps
             plugin.ui.document.getProps = function() return { language = "uk" } end
             plugin.unit_xp_matches = {}

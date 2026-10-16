@@ -929,5 +929,83 @@ describe("xray_fetch", function()
             assert.are.equal(30, called_args.last_fetch_page)
         end)
     end)
+
+    describe("sequential prefetch and Story Arc delta updates", function()
+        it("creates character entry for orphan character_state_updates", function()
+            plugin.characters = {}
+            local delta_data = {
+                character_state_updates = {
+                    {
+                        name = "Carrie White",
+                        role = "Protagonist",
+                        status = "alive",
+                        change = "Discovers telekinetic abilities",
+                        description = "A shy outcast who begins to manifest powerful telekinesis.",
+                        evidence = "The mirrors began to flex."
+                    }
+                }
+            }
+            local chapter = { title = "Part One (1/4)", page = 1 }
+            plugin:mergeSequentialChapterDelta(delta_data, chapter, 1, true)
+
+            assert.are.equal(1, #plugin.characters)
+            local c = plugin.characters[1]
+            assert.are.equal("Carrie White", c.name)
+            assert.are.equal("Protagonist", c.role)
+            assert.are.equal(1, #c.states)
+            assert.are.equal("Part One (1/4)", c.states[1].chapter_title)
+            assert.are.equal("Discovers telekinetic abilities", c.states[1].change)
+        end)
+
+        it("honors skip_checkpoint parameter in mergeSequentialChapterDelta", function()
+            local checkpoints = 0
+            plugin.checkpointHorizonScan = function() checkpoints = checkpoints + 1 end
+            local delta_data = { new_characters = {} }
+            local chapter = { title = "Chapter 1", page = 1 }
+
+            plugin:mergeSequentialChapterDelta(delta_data, chapter, 1, true)
+            assert.are.equal(0, checkpoints)
+
+            plugin:mergeSequentialChapterDelta(delta_data, chapter, 1, false)
+            assert.are.equal(1, checkpoints)
+        end)
+
+        it("subdivides oversized Part-only TOC chapters into virtual segments", function()
+            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            local raw_toc = {
+                { title = "Part One: Blood Sport", page = 1 },
+                { title = "Part Two: Prom Night", page = 91 },
+                { title = "Part Three: Wreckage", page = 171 },
+            }
+            local expanded = ChapterAnalyzer:expandOversizedTocChapters(raw_toc, 200, 25)
+            assert.is_not_nil(expanded)
+            -- Part 1: 90 pages -> ceil(90/25) = 4 parts
+            -- Part 2: 80 pages -> ceil(80/25) = 4 parts
+            -- Part 3: 30 pages -> ceil(30/25) = 2 parts
+            -- Total parts = 10
+            assert.are.equal(10, #expanded)
+            assert.are.equal("Part One: Blood Sport (1/4)", expanded[1].title)
+            assert.are.equal(1, expanded[1].page)
+            assert.is_true(expanded[1].is_virtual_segment)
+            assert.are.equal("Part One: Blood Sport", expanded[1].parent_title)
+            assert.are.equal("Part One: Blood Sport (2/4)", expanded[2].title)
+            assert.is_true(expanded[2].page > 1)
+            assert.is_true(expanded[2].end_page >= expanded[2].page)
+        end)
+
+        it("does not split normal-sized TOC chapters", function()
+            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            local raw_toc = {
+                { title = "Chapter 1", page = 1 },
+                { title = "Chapter 2", page = 15 },
+                { title = "Chapter 3", page = 30 },
+            }
+            local expanded = ChapterAnalyzer:expandOversizedTocChapters(raw_toc, 45, 25)
+            assert.are.equal(3, #expanded)
+            assert.are.equal("Chapter 1", expanded[1].title)
+            assert.is_nil(expanded[1].is_virtual_segment)
+        end)
+    end)
 end)
+
 

@@ -2695,7 +2695,7 @@ function M:buildCompactEntityManifest()
     return table.concat(lines, "\n")
 end
 
-function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
+function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_checkpoint)
     if not delta_data or type(delta_data) ~= "table" then return end
     chapter = chapter or {}
     chapter_idx = chapter_idx or chapter.toc_index or 1
@@ -2881,6 +2881,34 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
                     if u.role and u.role ~= "" then existing.role = u.role end
                     if u.status and u.status ~= "" then existing.status = u.status end
                     updateEntityDescPreservingPrior(existing, u.description)
+                else
+                    table.insert(self.characters, {
+                        id = u.id or makeId("char", u.name),
+                        name = u.name,
+                        aliases = u.aliases or {},
+                        role = u.role or "Character",
+                        status = u.status or "alive",
+                        description = u.description or "",
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                role = u.role or "Character",
+                                status = u.status or "alive",
+                                change = u.change or "",
+                                description = u.description or "",
+                                evidence = u.evidence or ""
+                            }
+                        }
+                    })
                 end
             end
         end
@@ -2946,6 +2974,29 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
                         evidence = u.evidence or ""
                     })
                     updateEntityDescPreservingPrior(existing, u.description)
+                else
+                    table.insert(self.locations, {
+                        id = u.id or makeId("loc", u.name),
+                        name = u.name,
+                        description = u.description or "",
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                change = u.change or "",
+                                description = u.description or "",
+                                evidence = u.evidence or ""
+                            }
+                        }
+                    })
                 end
             end
         end
@@ -3014,6 +3065,31 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
                         evidence = u.evidence or ""
                     })
                     updateEntityDescPreservingPrior(existing, desc, "definition")
+                else
+                    local desc = u.description or u.definition or ""
+                    table.insert(self.terms, {
+                        id = u.id or makeId("term", u.name),
+                        name = u.name,
+                        definition = desc,
+                        description = desc,
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                change = u.change or "",
+                                description = desc,
+                                evidence = u.evidence or ""
+                            }
+                        }
+                    })
                 end
             end
         end
@@ -3044,8 +3120,10 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
     local unique_id = ch_title .. "_" .. tostring(ch_page)
     self.chapters_fetched[unique_id] = true
 
-    -- Checkpoint immediately
-    self:checkpointHorizonScan()
+    -- Checkpoint immediately (unless part of a multi-chapter batch)
+    if not skip_checkpoint then
+        self:checkpointHorizonScan()
+    end
 end
 
 function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_progress, on_done)
@@ -3138,6 +3216,16 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             return
         end
 
+        local utils = require(plugin_path .. "xray_utils")
+        if utils and utils.isLowMemory and utils:isLowMemory() then
+            collectgarbage("collect")
+            if utils:isLowMemory() then
+                self:log("XRayPlugin: Device memory critically low, pausing sequential chapter prefetch.")
+                finishScan(false)
+                return
+            end
+        end
+
         local q = self.active_sequential_queue
         if not q or #q == 0 then
             finishScan(true)
@@ -3170,7 +3258,7 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                     end
                 end
 
-                local ch_text = ChapterAnalyzer:getSingleChapterText(self.ui, candidate, next_chapter, cur_page, 50000)
+                local ch_text = ChapterAnalyzer:getSingleChapterText(self.ui, candidate, next_chapter, nil, 50000)
                 if not ch_text or #ch_text < 100 then
                     self:log("XRayPlugin: Chapter text empty or too short, skipping: " .. tostring(candidate.title))
                     table.remove(q, 1)
@@ -3185,9 +3273,17 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                         break
                     end
                     table.remove(q, 1)
-                    candidate.text = ch_text
-                    candidate.unique_id = cand_id
-                    table.insert(batch_items, candidate)
+                    local item_entry = {
+                        title = candidate.title,
+                        page = candidate.page,
+                        end_page = candidate.end_page,
+                        xpointer = candidate.xpointer,
+                        toc_index = candidate.toc_index or cand_idx,
+                        depth = candidate.depth,
+                        unique_id = cand_id,
+                        text = ch_text,
+                    }
+                    table.insert(batch_items, item_entry)
                     total_batch_chars = total_batch_chars + #ch_text
                 end
             end
@@ -3217,6 +3313,11 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             end
         end
 
+        -- Immediately free pinned raw chapter texts from batch items once prompt is built
+        for _, bi in ipairs(batch_items) do
+            bi.text = nil
+        end
+
         if not prompt then
             self:log("XRayPlugin: Failed to build chapter delta prompt: " .. tostring(err))
             finishScan(false)
@@ -3239,6 +3340,7 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
         local settings_xray_dir = DataStorage:getSettingsDir() .. "/xray"
         local result_file = settings_xray_dir .. "/bg_delta_" .. tostring(os.time()) .. "_" .. tostring(first_idx) .. ".json"
 
+        collectgarbage("step", 100)
         local pid = self.ai_helper:makeRequestAsync(req_params, result_file)
         if not pid then
             self:log("XRayPlugin: Failed to start async AI request for batch starting at chapter " .. tostring(first_idx))
@@ -3291,12 +3393,15 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                             end
                             target_item = target_item or batch_items[1]
                             local resolved_idx = target_item.toc_index or target_idx or 1
-                            self:mergeSequentialChapterDelta(ch_delta, target_item, resolved_idx)
+                            self:mergeSequentialChapterDelta(ch_delta, target_item, resolved_idx, true)
                         end
                     else
                         -- Single-chapter fallback response
-                        self:mergeSequentialChapterDelta(data, batch_items[1], batch_items[1].toc_index or 1)
+                        self:mergeSequentialChapterDelta(data, batch_items[1], batch_items[1].toc_index or 1, true)
                     end
+
+                    self:checkpointHorizonScan()
+                    collectgarbage("step", 200)
 
                     for _, bi in ipairs(batch_items) do
                         self.chapters_fetched[bi.unique_id] = true

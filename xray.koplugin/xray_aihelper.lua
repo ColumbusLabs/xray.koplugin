@@ -2043,11 +2043,11 @@ function AIHelper:createPrompt(title, author, context, section_name, targeted_wo
         -- Series indices may be fractional (e.g. 2.5), which %d would truncate,
         -- so the index placeholders are filled as strings.
         local idx = context and context.index or 1
-        local is_fractional = idx ~= math.floor(idx)
+        local is_fractional = (idx ~= math.floor(idx)) or (context and context.has_fractional == true)
         local last_whole = math.ceil(idx) - 1
         success, final_prompt = pcall(string.format, template:gsub("%%d", "%%s"), context.series_name or "Unknown", formatSeriesIndex(idx), enhanced_title, enhanced_author, formatSeriesIndex(last_whole))
         if is_fractional then
-            extra_context = extra_context .. "\n\nNOTE: This series numbers some entries with decimals (e.g. 1.5 for a novella or split volume). The current book is index " .. formatSeriesIndex(idx) .. ". List EVERY entry whose index is lower than " .. formatSeriesIndex(idx) .. ", including decimal-numbered ones, and give each entry's exact index as the series numbers it."
+            extra_context = extra_context .. "\n\nNOTE: This series numbers some entries with decimals (e.g. 1.5 or 2.5 for a novella or split volume). The current book is index " .. formatSeriesIndex(idx) .. ". List EVERY entry whose index is lower than " .. formatSeriesIndex(idx) .. ", including decimal-numbered ones, and give each entry's exact index as the series numbers it."
         end
     elseif section_name == "series_book_summary" then
         local idx = context and context.index or 1

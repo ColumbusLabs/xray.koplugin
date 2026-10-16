@@ -8,6 +8,16 @@ local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 local utils = require(plugin_path .. "xray_utils")
 local SeriesManager = require(plugin_path .. "xray_seriesmanager")
 
+local function bookHasEntities(b, sm)
+    if not b or type(b) ~= "table" then return false end
+    if sm and sm.hasBookEntities then return sm.hasBookEntities(b) end
+    if SeriesManager and SeriesManager.hasBookEntities then return SeriesManager.hasBookEntities(b) end
+    return ((b.characters and #b.characters > 0) or
+            (b.locations and #b.locations > 0) or
+            (b.terms and #b.terms > 0) or
+            (b.timeline and #b.timeline > 0)) and true or false
+end
+
 local function _truncateSafe(text, limit)
     return (utils:getTruncatedText(text, limit))
 end
@@ -458,6 +468,7 @@ function M:_processSingleWordResult(result, text, book_text, current_page)
             updated.timeline = self.timeline
             updated.book_type = self.book_type or updated.book_type
             updated.author_info = self.author_info or updated.author_info
+            updated.images = (self.images and #self.images > 0 and self.images) or updated.images or (self.book_data and self.book_data.images)
             updated.last_fetch_page = updated.last_fetch_page
             
             if doc_file then
@@ -1234,6 +1245,7 @@ function M:finalizeXRayData(final_book_data, title, author, book_text, is_update
     updated_data.book_type = self.book_type or updated_data.book_type
     updated_data.timeline = self.timeline
     updated_data.author_info = self.author_info or updated_data.author_info
+    updated_data.images = (self.images and #self.images > 0 and self.images) or updated_data.images or (self.book_data and self.book_data.images)
     updated_data.last_fetch_page = current_page
     if self.ui and self.ui.document and self.ui.document.getCurrentPos then
         local ok_pos, pos = pcall(function() return self.ui.document:getCurrentPos() end)
@@ -1287,7 +1299,8 @@ function M:finalizeXRayData(final_book_data, title, author, book_text, is_update
                         and self.series_manager:getExpectedPriorIndices(series_info, cache_data.books, doc_file)
                         or SeriesManager.wholeIndicesBefore(index)
                     for _, p_idx in ipairs(prior_indices) do
-                        if not cache_data.books[p_idx] then
+                        local b = cache_data.books[p_idx]
+                        if not bookHasEntities(b, self.series_manager) then
                             all_priors_cached = false
                             break
                         end
@@ -1779,6 +1792,7 @@ function M:fetchMoreEntities(entity_type)
                     updated_data.book_type = self.book_type or updated_data.book_type
                     updated_data.timeline = self.timeline or updated_data.timeline
                     updated_data.author_info = self.author_info or updated_data.author_info
+                    updated_data.images = (self.images and #self.images > 0 and self.images) or updated_data.images or (self.book_data and self.book_data.images)
 
                     self.cache_manager:asyncSaveCache(doc_file, updated_data)
 
@@ -2019,6 +2033,7 @@ function M:fetchAuthorInfo()
                     cache.book_type = author_data.book_type
                     self.book_type = author_data.book_type
                 end
+                cache.images = (self.images and #self.images > 0 and self.images) or cache.images or (self.book_data and self.book_data.images)
                 
                 self.cache_manager:asyncSaveCache(doc_file, cache)
                 self:showAuthorInfo()
@@ -2278,6 +2293,7 @@ function M:mergeSeriesContext(cache_data, series_info)
         cache.locations = self.locations
         cache.terms = self.terms
         cache.timeline = self.timeline
+        cache.images = (self.images and #self.images > 0 and self.images) or cache.images or (self.book_data and self.book_data.images)
         self.cache_manager:asyncSaveCache(book_path, cache)
         self.book_data = cache
     end
@@ -2316,7 +2332,8 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
     self:log("XRayPlugin: Series: fetchSeriesContext starting for: title=" .. tostring(title) .. ", author=" .. tostring(author))
 
     if init_wait_dialog and self.ai_helper then self.ai_helper:setTrapWidget(init_wait_dialog) end
-    local series_info = self.series_manager:detectSeries(props, title, author, self.ai_helper)
+    local series_info = (self.series_manager and self.series_manager.getSeriesInfo and self.series_manager:getSeriesInfo(self.book_data, props, title, author, self.ai_helper))
+        or (self.series_manager and self.series_manager.detectSeries and self.series_manager:detectSeries(props, title, author, self.ai_helper))
     if init_wait_dialog and self.ai_helper then self.ai_helper:resetTrapWidget() end
     if cancel_ref and cancel_ref.cancelled then
         self:log("XRayPlugin: Series: fetchSeriesContext cancelled after detectSeries")
@@ -2366,34 +2383,26 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
     end
 
     local missing_books = {}
-    for _, book in ipairs(prior_books) do
-        local idx = book.index
-        if not cache_data.books[idx] then
-            self:log("XRayPlugin: Series: Cache MISS for book index " .. tostring(idx) .. ": " .. tostring(book.title))
-            table.insert(missing_books, book)
-        else
-            self:log("XRayPlugin: Series: Cache HIT for book index " .. tostring(idx) .. ": " .. tostring(book.title))
-        end
-    end
-
-    local missing_books = {}
     local books_needing_timeline_summary = {}
 
     for _, book in ipairs(prior_books) do
         local idx = book.index
         local cached_book = cache_data.books and cache_data.books[idx]
 
-        -- If missing or if existing is from LLM, check local device storage first!
-        if not cached_book or cached_book.source ~= "local_xray" then
-            local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(series_info, idx, doc_file, book.title, self.cache_manager)
-            if local_book then
+        -- If missing, or roster stub, or missing entities, or from LLM: check local device storage first!
+        local has_entities = bookHasEntities(cached_book, self.series_manager)
+        if not cached_book or not has_entities or cached_book.source ~= "local_xray" then
+            local check_path = book.path or (cache_data.book_paths and cache_data.book_paths[idx]) or doc_file
+            local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(series_info, idx, check_path, book.title, self.cache_manager)
+            if bookHasEntities(local_book, self.series_manager) then
                 cached_book = local_book
                 cache_data.books[idx] = local_book
+                has_entities = true
                 self:log("XRayPlugin: Series: Found local X-Ray data on device for Book " .. tostring(idx) .. ": " .. tostring(book.title))
             end
         end
 
-        if cached_book then
+        if cached_book and has_entities then
             self:log("XRayPlugin: Series: Cache HIT for book index " .. tostring(idx) .. " (" .. (cached_book.source or "cached") .. "): " .. tostring(book.title))
             if cached_book.source == "local_xray" and cached_book.timeline and #cached_book.timeline > 1 and not cached_book.timeline_summarized then
                 table.insert(books_needing_timeline_summary, { index = idx, book = cached_book })
@@ -2587,15 +2596,22 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
 
                     self:log("XRayPlugin: Series: Fetched context for " .. tostring(current_book.title) .. ". Characters=" .. tostring(#(result.characters or {})) .. ", locations=" .. tostring(#(result.locations or {})) .. ", terms=" .. tostring(#(result.terms or {})) .. ", timeline=" .. tostring(#(result.timeline or {})))
 
+                    local existing_book = cache_data.books[current_book.index]
+                    local book_path = current_book.path or (cache_data.book_paths and cache_data.book_paths[current_book.index]) or (existing_book and existing_book.path)
                     cache_data.books[current_book.index] = {
                         title = current_book.title,
                         author = current_book.author,
+                        path = book_path,
                         characters = result.characters or {},
                         locations = result.locations or {},
                         terms = result.terms or {},
                         timeline = result.timeline or {},
                         source = "llm_summary"
                     }
+                    if book_path then
+                        cache_data.book_paths = cache_data.book_paths or {}
+                        cache_data.book_paths[current_book.index] = book_path
+                    end
                     -- Save after each book so a later failure or cancel doesn't
                     -- discard the books already fetched; a retry then only
                     -- fetches the ones still missing.
@@ -2625,6 +2641,7 @@ function M:checkpointHorizonScan()
     cache.author_info = self.author_info or cache.author_info
     cache.book_title = cache.book_title or (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps().title)
     cache.book_author = cache.book_author or (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps().authors)
+    cache.images = (self.images and #self.images > 0 and self.images) or cache.images or (self.book_data and self.book_data.images)
 
     self.cache_manager:asyncSaveCache(doc_file, cache)
 end

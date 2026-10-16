@@ -30,6 +30,16 @@ local XRaySettingsCard = require(plugin_path .. "xray_settings_card")
 local utils = require(plugin_path .. "xray_utils")
 local SeriesManager = require(plugin_path .. "xray_seriesmanager")
 
+local function bookHasEntities(b, sm)
+    if not b or type(b) ~= "table" then return false end
+    if sm and sm.hasBookEntities then return sm.hasBookEntities(b) end
+    if SeriesManager and SeriesManager.hasBookEntities then return SeriesManager.hasBookEntities(b) end
+    return ((b.characters and #b.characters > 0) or
+            (b.locations and #b.locations > 0) or
+            (b.terms and #b.terms > 0) or
+            (b.timeline and #b.timeline > 0)) and true or false
+end
+
 local M = {}
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -3499,10 +3509,14 @@ function M:clearCache()
     self.historical_figures = {}
     self.terms = {}
     self.terms_fetched = false
+    self.images = {}
     self.author_info = nil
     self.book_data = {}
     self.series_context_loaded = false
     self.xray_mode_enabled = false
+    if self.image_manager and self.image_manager.clearSpineCache then
+        self.image_manager:clearSpineCache()
+    end
     UIManager:show(InfoMessage:new{ text = self.loc:t("cache_cleared"), timeout = 3 })
 end
 
@@ -6412,7 +6426,7 @@ function M:checkSeriesContext()
     end
 
     -- 1. Try metadata check first (without AI, passes nil for ai_helper)
-    local series_info = self.series_manager and self.series_manager.detectSeries and self.series_manager:detectSeries(props, title, author, nil)
+    local series_info = self.series_manager and (self.series_manager.getSeriesInfo and self.series_manager:getSeriesInfo(self.book_data, props, title, author, nil) or (self.series_manager.detectSeries and self.series_manager:detectSeries(props, title, author, nil)))
     local has_explicit_metadata_index = props and (props.series_index or props.seriesindex or props.SeriesIndex)
     local has_title_index = series_info and self.series_manager and self.series_manager.extractIndexFromTitle and self.series_manager:extractIndexFromTitle(title, series_info.name)
 
@@ -6429,9 +6443,12 @@ function M:checkSeriesContext()
             local doc_file = self.ui and self.ui.document and self.ui.document.file
             local prior_indices = self:getExpectedPriorIndices(series_info, cache_data.books, doc_file)
             for _, p_idx in ipairs(prior_indices) do
-                if not cache_data.books[p_idx] or cache_data.books[p_idx].source ~= "local_xray" then
-                    local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(series_info, p_idx, doc_file, nil, self.cache_manager)
-                    if local_book then
+                local cached_b = cache_data.books[p_idx]
+                local has_entities = bookHasEntities(cached_b, self.series_manager)
+                if not cached_b or not has_entities or cached_b.source ~= "local_xray" then
+                    local check_path = (cache_data.book_paths and cache_data.book_paths[p_idx]) or doc_file
+                    local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(series_info, p_idx, check_path, nil, self.cache_manager)
+                    if bookHasEntities(local_book, self.series_manager) then
                         cache_data.books[p_idx] = local_book
                     end
                 end
@@ -6439,7 +6456,8 @@ function M:checkSeriesContext()
 
             local all_priors_cached = true
             for _, p_idx in ipairs(prior_indices) do
-                if not cache_data.books[p_idx] then
+                local cached_b = cache_data.books[p_idx]
+                if not bookHasEntities(cached_b, self.series_manager) then
                     all_priors_cached = false
                     break
                 end
@@ -6532,9 +6550,12 @@ function M:checkSeriesContext()
                         local doc_file = self.ui and self.ui.document and self.ui.document.file
                         local prior_indices = self:getExpectedPriorIndices(ai_series_info, cache_data.books, doc_file)
                         for _, p_idx in ipairs(prior_indices) do
-                            if not cache_data.books[p_idx] or cache_data.books[p_idx].source ~= "local_xray" then
-                                local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(ai_series_info, p_idx, doc_file, nil, self.cache_manager)
-                                if local_book then
+                            local cached_b = cache_data.books[p_idx]
+                            local has_entities = bookHasEntities(cached_b, self.series_manager)
+                            if not cached_b or not has_entities or cached_b.source ~= "local_xray" then
+                                local check_path = (cache_data.book_paths and cache_data.book_paths[p_idx]) or doc_file
+                                local local_book = self.series_manager and self.series_manager.findLocalBookXRay and self.series_manager:findLocalBookXRay(ai_series_info, p_idx, check_path, nil, self.cache_manager)
+                                if bookHasEntities(local_book, self.series_manager) then
                                     cache_data.books[p_idx] = local_book
                                 end
                             end
@@ -6542,7 +6563,8 @@ function M:checkSeriesContext()
 
                         local all_priors_cached = true
                         for _, p_idx in ipairs(prior_indices) do
-                            if not cache_data.books[p_idx] then
+                            local cached_b = cache_data.books[p_idx]
+                            if not bookHasEntities(cached_b, self.series_manager) then
                                 all_priors_cached = false
                                 break
                             end
@@ -7256,28 +7278,63 @@ function M:showManageSeriesDialog()
         local slug = self.series_manager:makeSlug(series_name)
         if not slug or slug == "" then slug = "series" end
 
+        -- 0. Prune removed books from series cache
+        local current_roster_indices = {}
+        for _, b in ipairs(books_roster) do
+            if b.index then
+                current_roster_indices[b.index] = true
+            end
+        end
+        local existing_series_cache = self.series_manager and self.series_manager.loadSeriesCache and self.series_manager:loadSeriesCache(slug)
+        if existing_series_cache and existing_series_cache.books then
+            local modified = false
+            for idx in pairs(existing_series_cache.books) do
+                if not current_roster_indices[idx] then
+                    existing_series_cache.books[idx] = nil
+                    if existing_series_cache.book_paths then
+                        existing_series_cache.book_paths[idx] = nil
+                    end
+                    modified = true
+                end
+            end
+            if modified and self.series_manager.saveSeriesCache then
+                self.series_manager:saveSeriesCache(slug, existing_series_cache)
+            end
+        end
+
         -- 1. Sync all books to series cache
         for _, b in ipairs(books_roster) do
             if b.index then
-                local minimal_data = {
+                local real_data = nil
+                if b.path then
+                    if self.cache_manager and self.cache_manager.loadCache then
+                        real_data = self.cache_manager:loadCache(b.path)
+                    end
+                    if (not real_data or not bookHasEntities(real_data, self.series_manager)) and self.series_manager and self.series_manager.getCandidateSidecarDirs then
+                        local cand_dirs = self.series_manager:getCandidateSidecarDirs(b.path)
+                        for _, sdr_dir in ipairs(cand_dirs) do
+                            local cache_file = sdr_dir .. "/xray_cache.lua"
+                            local ok_c, loaded = pcall(dofile, cache_file)
+                            if ok_c and type(loaded) == "table" and bookHasEntities(loaded, self.series_manager) then
+                                real_data = loaded
+                                break
+                            end
+                        end
+                    end
+                end
+
+                local has_entities = bookHasEntities(real_data, self.series_manager)
+                local book_to_sync = has_entities and real_data or {
                     title = b.title,
                     author = b.author,
                     characters = {},
                     locations = {},
                     terms = {},
                     timeline = {},
+                    source = "roster",
                 }
-                -- If we have an existing cache or sidecar, load real entities if available
-                if b.path then
-                    local sep = b.path:find("\\") and "\\" or "/"
-                    local cache_file = b.path .. ".sdr" .. sep .. "xray_cache.lua"
-                    local ok_c, real_cache = pcall(dofile, cache_file)
-                    if ok_c and type(real_cache) == "table" then
-                        minimal_data = real_cache
-                    end
-                end
-
-                self.series_manager:syncBookToSeriesCache(slug, b.index, minimal_data, b.path)
+                local source = has_entities and (real_data.source or "local_xray") or "roster"
+                self.series_manager:syncBookToSeriesCache(slug, b.index, book_to_sync, b.path, source)
 
                 -- 2. Write metadata to KOReader sidecar
                 if b.path then
@@ -7295,6 +7352,8 @@ function M:showManageSeriesDialog()
                     self.book_data.series_index = b.index
                 end
             end
+            self.book_data.series_context_loaded = nil
+            self.book_data.series_context_dismissed = nil
             if self.cache_manager and doc_file then
                 self.cache_manager:asyncSaveCache(doc_file, self.book_data)
             end
@@ -7444,10 +7503,14 @@ function M:showImages(opts)
 
     -- Load images: prefer book_data.images from cache (preserves user customizations & rotations),
     -- fall back to scan only if no cached images exist.
-    if (not self.book_data or not self.book_data.images) and self.cache_manager and self.ui and self.ui.document and self.ui.document.file then
+    if (not self.book_data or not self.book_data.images or #self.book_data.images == 0) and self.cache_manager and self.ui and self.ui.document and self.ui.document.file then
         local loaded = self.cache_manager:loadCache(self.ui.document.file)
         if loaded and type(loaded) == "table" then
-            self.book_data = loaded
+            if not self.book_data or type(self.book_data) ~= "table" then
+                self.book_data = loaded
+            elseif loaded.images and #loaded.images > 0 then
+                self.book_data.images = loaded.images
+            end
         end
     end
 
@@ -7510,9 +7573,11 @@ function M:showImages(opts)
                 end
             end
             self.images = scanned
-            self.book_data.images = self.images
-            if self.cache_manager and self.ui.document.file then
-                self.cache_manager:asyncSaveCache(self.ui.document.file, self.book_data)
+            if #scanned > 0 then
+                self.book_data.images = self.images
+                if self.cache_manager and self.ui.document.file then
+                    self.cache_manager:asyncSaveCache(self.ui.document.file, self.book_data)
+                end
             end
         end
     end
@@ -8152,8 +8217,8 @@ function M:openImageViewer(image_entry)
     if not image_entry then return end
     
     -- Check spoiler protection
-    local is_spoiler = image_entry.is_spoiler
-    if is_spoiler and self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.no_spoilers ~= false then
+    local is_spoiler = image_entry.is_spoiler and not image_entry.spoiler_revealed
+    if is_spoiler and self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.spoiler_setting ~= "full_book" and self.ai_helper.settings.no_spoilers ~= false then
         local ConfirmBox = require("ui/widget/confirmbox")
         local msg = string.format(self.loc:t("img_spoiler_confirm") or "This image appears on page %d (past your current reading progress). Reveal image?", tonumber(image_entry.page) or 0)
         local confirm
@@ -8164,7 +8229,25 @@ function M:openImageViewer(image_entry)
             cancel_text = self.loc:t("cancel"),
             ok_callback = function()
                 image_entry.is_spoiler = false
+                image_entry.spoiler_revealed = true
+                if self.images then
+                    for _, img in ipairs(self.images) do
+                        if img.id == image_entry.id or img.href == image_entry.href then
+                            img.is_spoiler = false
+                            img.spoiler_revealed = true
+                        end
+                    end
+                end
+                if self.book_data and self.book_data.images then
+                    for _, img in ipairs(self.book_data.images) do
+                        if img.id == image_entry.id or img.href == image_entry.href then
+                            img.is_spoiler = false
+                            img.spoiler_revealed = true
+                        end
+                    end
+                end
                 if self.image_gallery_overlay then
+                    self.image_gallery_overlay.cached_pages = nil
                     self.image_gallery_overlay:buildUI()
                     UIManager:setDirty(self.image_gallery_overlay, "ui")
                 end

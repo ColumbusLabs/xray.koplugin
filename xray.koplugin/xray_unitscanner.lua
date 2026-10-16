@@ -624,7 +624,7 @@ function M:loadUnitCache(resolved_dir)
         end
 
         if not is_ukrainian then
-            local v30_expected = current_sig:gsub("^v31|", "v30|")
+            local v30_expected = current_sig:gsub("^v%d+|", "v30|")
             if signature == v30_expected then
                 sig_matches = true
                 log("loadUnitCache: Accepting legacy v30 cache for non-Ukrainian book.")

@@ -224,6 +224,65 @@ function SeriesManager.priorIndicesIn(books, index)
     return list
 end
 
+-- Re-orders entity descriptions containing "[From Book ...]" sections so that
+-- the current book description appears FIRST, followed by each prior series description
+-- in chronological book order ([From Book 1], [From Book 2], etc.).
+function SeriesManager.reorderSeriesDescription(text)
+    if not text or type(text) ~= "string" or not text:find("%[From Book [%d%.]+%]") then
+        return text
+    end
+
+    local sections = {}
+    local pos = 1
+    local len = #text
+    while pos <= len do
+        local s_start, s_end = text:find("\n%s*\n+", pos)
+        local sec
+        if s_start then
+            sec = text:sub(pos, s_start - 1)
+            pos = s_end + 1
+        else
+            sec = text:sub(pos)
+            pos = len + 1
+        end
+        sec = sec:match("^%s*(.-)%s*$")
+        if sec and sec ~= "" then
+            table.insert(sections, sec)
+        end
+    end
+
+    local current_parts = {}
+    local prior_books = {}
+    local seen_prefixes = {}
+
+    for _, sec in ipairs(sections) do
+        local book_idx_str = sec:match("^%[From Book ([%d%.]+)%]")
+        if book_idx_str then
+            local b_num = tonumber(book_idx_str) or 0
+            if not seen_prefixes[book_idx_str] then
+                seen_prefixes[book_idx_str] = true
+                table.insert(prior_books, { idx = b_num, text = sec })
+            end
+        else
+            table.insert(current_parts, sec)
+        end
+    end
+
+    table.sort(prior_books, function(a, b)
+        return a.idx < b.idx
+    end)
+
+    local combined = {}
+    if #current_parts > 0 then
+        table.insert(combined, table.concat(current_parts, "\n\n"))
+    end
+    for _, pb in ipairs(prior_books) do
+        table.insert(combined, pb.text)
+    end
+
+    return table.concat(combined, "\n\n")
+end
+
 -- Books on the device whose metadata places them before the current book in this series
 function SeriesManager:findLocalPriorBooks(series_info, current_book_path)
     local list = {}

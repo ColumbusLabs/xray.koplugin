@@ -282,14 +282,14 @@ describe("xray_chapteranalyzer", function()
             assert.are.equal("Chapter 1", titles[1])
             assert.are.equal("Chapter 2", titles[2])
 
-            -- Chapter 1 is fully read, so it should fetch using getTextFromXPointer
-            assert.are.equal(1, #getTextFromXPointer_calls)
-            assert.are.equal("xp_ch1", getTextFromXPointer_calls[1])
+            -- Chapter 1 is an earlier chapter, so per #150 it should fetch bounded to the next chapter with getTextFromXPointers (xp_ch1 to xp_ch2)
+            assert.are.equal(2, #getTextFromXPointers_calls)
+            assert.are.equal("xp_ch1", getTextFromXPointers_calls[1].start_xp)
+            assert.are.equal("xp_ch2", getTextFromXPointers_calls[1].end_xp)
 
             -- Chapter 2 is the current chapter, so it should fetch using getTextFromXPointers (page 20 to 26 to include current page)
-            assert.are.equal(1, #getTextFromXPointers_calls)
-            assert.are.equal("xp_page_20", getTextFromXPointers_calls[1].start_xp)
-            assert.are.equal("xp_page_26", getTextFromXPointers_calls[1].end_xp)
+            assert.are.equal("xp_page_20", getTextFromXPointers_calls[2].start_xp)
+            assert.are.equal("xp_page_26", getTextFromXPointers_calls[2].end_xp)
         end)
 
         it("spoiler-free mode does not sample beyond the current PDF page", function()

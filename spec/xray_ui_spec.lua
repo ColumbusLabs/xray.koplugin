@@ -1267,8 +1267,10 @@ describe("xray_ui", function()
             assert.is_not_nil(deepseek_menu[1].text:find("deepseek%-flash"))
 
             local claude_menu = claude_item.sub_item_table_func()
-            assert.is_not_nil(claude_menu[1].text:find("claude%-sonnet%-5%.5"))
+            assert.is_not_nil(claude_menu[1].text:find("claude%-sonnet%-5%-5"))
             assert.is_not_nil(claude_menu[2].text:find("claude%-sonnet%-5"))
+            assert.is_not_nil(claude_menu[4].text:find("claude%-haiku%-5%-5"))
+            assert.is_not_nil(claude_menu[5].text:find("claude%-haiku%-4%-5"))
         end)
     end)
 

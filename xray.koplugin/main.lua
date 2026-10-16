@@ -760,6 +760,38 @@ function XRayPlugin:scheduleBackgroundCatchUp(delay)
     UIManager:scheduleIn(delay or 3, callback)
 end
 
+function XRayPlugin:checkPrefetchHorizon()
+    if self.destroyed or not self.ui or not self.ui.document then return end
+    local horizon = self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.prefetch_horizon_chapters or 0
+    if horizon <= 0 then return end
+    if not self.ai_helper or not self.ai_helper.hasApiKey or not self.ai_helper:hasApiKey() then return end
+
+    local cur_page = self.getCurrentDocPage and self:getCurrentDocPage() or (self.ui.getCurrentPage and self.ui:getCurrentPage()) or 1
+    local cur_chap_idx = self.getCurrentChapterIndex and self:getCurrentChapterIndex(cur_page) or 1
+
+    local toc = self:_getFlatToc()
+    if not toc or #toc == 0 then return end
+
+    local target_chapters = {}
+    local end_idx = math.min(#toc, cur_chap_idx + horizon)
+    for i = cur_chap_idx + 1, end_idx do
+        local ch = toc[i]
+        if ch and not (self.isNonNarrativeChapter and self:isNonNarrativeChapter(ch.title or "")) then
+            ch.toc_index = i
+            local unique_id = (ch.title or ("Chapter " .. tostring(i))) .. "_" .. tostring(ch.page)
+            self.chapters_fetched = self.chapters_fetched or {}
+            if not self.chapters_fetched[unique_id] then
+                table.insert(target_chapters, ch)
+            end
+        end
+    end
+
+    if #target_chapters > 0 then
+        self:log("XRayPlugin: Horizon prefetch detected " .. tostring(#target_chapters) .. " upcoming chapters to prefetch.")
+        self:queueSequentialChapterScan(target_chapters, false)
+    end
+end
+
 function XRayPlugin:onNetworkConnected()
     local document = self.ui and self.ui.document
     if not document then return end
@@ -773,6 +805,10 @@ function XRayPlugin:onNetworkConnected()
     if self.pending_background_fetch or (spoiler_setting == "full_book" and self:isCatchUpNeeded()) then
         self.pending_background_fetch = true
         self:scheduleBackgroundCatchUp(3)
+    end
+
+    if self.checkPrefetchHorizon then
+        self:checkPrefetchHorizon()
     end
 end
 
@@ -964,6 +1000,9 @@ function XRayPlugin:onPageUpdate(pageno)
                 self:scheduleBackgroundCatchUp(5)
             end
         end
+        if self.checkPrefetchHorizon then
+            self:checkPrefetchHorizon()
+        end
         return
     end
 
@@ -977,6 +1016,9 @@ function XRayPlugin:onPageUpdate(pageno)
 
     -- Already fetched this chapter this session?
     if self.chapters_fetched[unique_id] then 
+        if self.checkPrefetchHorizon then
+            self:checkPrefetchHorizon()
+        end
         return 
     end
 
@@ -1426,6 +1468,15 @@ function XRayPlugin:getSubMenuItems()
         separator = true,
     })
 
+    table.insert(items, {
+        text = self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book…",
+        keep_menu_open = true,
+        callback = function()
+            self:startFullBookPreGeneration()
+        end,
+        separator = true,
+    })
+
     self.current_xray_menu_table = items
     table.insert(items, {
         text = self.loc:t("menu_settings") or "Settings",
@@ -1479,6 +1530,11 @@ function XRayPlugin:getSubMenuItems()
                         text = self.loc:t("mentions_setting_title") or "Mentions Settings",
                         keep_menu_open = true,
                         callback = function() self:showMentionsSettings() end,
+                    },
+                    {
+                        text = self.loc:t("menu_evolution_settings") or "Evolution Settings",
+                        keep_menu_open = true,
+                        callback = function() self:showEvolutionSettings() end,
                     },
                 }
             },
@@ -1568,6 +1624,11 @@ function XRayPlugin:getSubMenuItems()
                         text = self.loc:t("spoiler_preference_title") or "Spoiler Settings",
                         keep_menu_open = true,
                         callback = function() self:showSpoilerSettings() end,
+                    },
+                    {
+                        text = self.loc:t("menu_prefetch_horizon") or "Prefetch Horizon (Offline Readers)",
+                        keep_menu_open = true,
+                        callback = function() self:showPrefetchHorizonSettings() end,
                     },
                 }
             },

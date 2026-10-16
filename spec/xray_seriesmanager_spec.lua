@@ -375,12 +375,12 @@ describe("xray_seriesmanager", function()
             local series_info = { name = "Mistborn", index = 2, slug = "mistborn" }
             plugin:mergeSeriesContext(cache_data, series_info)
 
-            -- Verify existing character is prepended with [From Book N]
+            -- Verify existing character has current book description first, followed by [From Book N]
             assert.are.equal(2, #plugin.characters)
             local vin = plugin.characters[1]
             assert.are.equal("Vin", vin.name)
-            assert.truthy(vin.description:find("^%[From Book 1%] Survivor's apprentice"))
-            assert.truthy(vin.description:find("Street urchin$"))
+            assert.truthy(vin.description:find("^Street urchin"))
+            assert.truthy(vin.description:find("%[From Book 1%] Survivor's apprentice$"))
 
             -- Verify new character is inserted with source = series_prior
             local kelsier = plugin.characters[2]
@@ -391,7 +391,8 @@ describe("xray_seriesmanager", function()
             -- Verify locations merging
             assert.are.equal(2, #plugin.locations)
             local luthadel = plugin.locations[1]
-            assert.truthy(luthadel.description:find("^%[From Book 1%] Capital of Final Empire"))
+            assert.truthy(luthadel.description:find("^Current city details"))
+            assert.truthy(luthadel.description:find("%[From Book 1%] Capital of Final Empire$"))
             local hathsin = plugin.locations[2]
             assert.are.equal("Hathsin", hathsin.name)
             assert.are.equal("series_prior", hathsin.source)
@@ -399,7 +400,8 @@ describe("xray_seriesmanager", function()
             -- Verify terms merging
             assert.are.equal(2, #plugin.terms)
             local allomancy = plugin.terms[1]
-            assert.truthy(allomancy.definition:find("^%[From Book 1%] Metal burning art"))
+            assert.truthy(allomancy.definition:find("^Current definition"))
+            assert.truthy(allomancy.definition:find("%[From Book 1%] Metal burning art$"))
             local feruchemy = plugin.terms[2]
             assert.are.equal("Feruchemy", feruchemy.name)
             assert.are.equal("series_prior", feruchemy.source)
@@ -1423,6 +1425,25 @@ return {
             assert.are.equal("Fool Moon", cache.books[2].title)
             assert.is_nil(cache.books[3])
             assert.is_false(merged)
+        end)
+    end)
+
+    describe("reorderSeriesDescription", function()
+        it("leaves descriptions without series tags untouched", function()
+            local desc = "A rugged private investigator running an agency on Denmark Street."
+            assert.are.equal(desc, SeriesManager.reorderSeriesDescription(desc))
+        end)
+
+        it("places current book description first, followed by prior series descriptions in ascending order", function()
+            local legacy_merged = "[From Book 2] Solves the Quine murder.\n\n[From Book 1] War veteran starting an agency.\n\nA rugged private investigator running Denmark Street agency."
+            local reordered = SeriesManager.reorderSeriesDescription(legacy_merged)
+            local expected = "A rugged private investigator running Denmark Street agency.\n\n[From Book 1] War veteran starting an agency.\n\n[From Book 2] Solves the Quine murder."
+            assert.are.equal(expected, reordered)
+        end)
+
+        it("handles entities present only in prior books correctly", function()
+            local prior_only = "[From Book 1] Minor informant who died in the first case."
+            assert.are.equal(prior_only, SeriesManager.reorderSeriesDescription(prior_only))
         end)
     end)
 end)

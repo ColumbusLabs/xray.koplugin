@@ -199,7 +199,16 @@ function M:fetchSingleWord(text, pos0, pos1)
             
             -- 2. Immediate book text (Previous and Current page for maximum context relevance)
             local end_page = self.chapter_analyzer:getEndPageForCurrentPage(self.ui, current_page)
-            local book_text = self.chapter_analyzer:getTextFromPageRange(self.ui, math.max(1, current_page - 1), end_page, 25000)
+            local raw_book_text = self.chapter_analyzer:getTextFromPageRange(self.ui, math.max(1, current_page - 1), end_page, 25000) or ""
+            local book_text = raw_book_text
+            -- #150: Clamp single-word lookup text so it doesn't leak remainder of the page beyond the target
+            if text and text ~= "" and #raw_book_text > 0 then
+                local s_pos = raw_book_text:lower():find(text:lower(), 1, true)
+                if s_pos then
+                    local cut_pos = math.min(#raw_book_text, s_pos + #text + 200)
+                    book_text = raw_book_text:sub(1, cut_pos)
+                end
+            end
             
             local context_prefix = "SEARCH TARGET: \"" .. text .. "\"\n"
                 .. "IMPORTANT: The reader highlighted exactly this text. It IS a meaningful term from this book.\n"
@@ -665,10 +674,17 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
                 notifyComplete(false, "ALREADY_COVERED")
                 return
             end
-            stale_cached_position = true
-            self:log("XRayPlugin: Ignoring stale last_fetch_page=" .. tostring(first_missing_page)
-                .. " beyond analysis boundary=" .. tostring(end_page_analysis))
-            first_missing_page = nil
+            -- #150: When reader has navigated backward, aborting avoids rewriting earlier descriptions with future knowledge
+            self:log("XRayPlugin: Position already covered (last_fetch_page=" .. tostring(first_missing_page)
+                .. " >= end_page=" .. tostring(end_page_analysis) .. "). Aborting update to avoid rewriting descriptions with future knowledge.")
+            if wait_msg then UIManager:close(wait_msg) end
+            local translated = self.loc:t("no_new_text")
+            local message = (translated and translated ~= "no_new_text") and translated
+                or "No new text was available at your current position; X-Ray is already up to date here."
+            UIManager:show(InfoMessage:new{ text = message, timeout = 4 })
+            finishActiveRequest()
+            notifyComplete(false, "ALREADY_COVERED")
+            return
         end
 
         local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, end_page_analysis, first_missing_page)
@@ -691,7 +707,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
             local is_full_book = (reading_percent == 100 and not batch_end_page)
             local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(
                 self.ui, 200, 150000, is_full_book, first_missing_page, known_chapters, current_page)
-            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
+            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui, end_page_analysis or current_page)
 
             if (not book_text or #book_text < 10) and not samples then
                 if wait_msg then UIManager:close(wait_msg) end
@@ -1219,6 +1235,13 @@ function M:finalizeXRayData(final_book_data, title, author, book_text, is_update
     updated_data.timeline = self.timeline
     updated_data.author_info = self.author_info or updated_data.author_info
     updated_data.last_fetch_page = current_page
+    if self.ui and self.ui.document and self.ui.document.getCurrentPos then
+        local ok_pos, pos = pcall(function() return self.ui.document:getCurrentPos() end)
+        if ok_pos and pos then updated_data.last_fetch_xpointer = pos end
+    elseif self.ui and self.ui.rolling and self.ui.rolling.getCurrentPos then
+        local ok_pos, pos = pcall(function() return self.ui.rolling:getCurrentPos() end)
+        if ok_pos and pos then updated_data.last_fetch_xpointer = pos end
+    end
     
     local s = self.ai_helper and self.ai_helper.settings or {}
     updated_data.timeline_event_len = s.timeline_event_len or 80
@@ -2084,8 +2107,13 @@ function M:mergeSeriesContext(cache_data, series_info)
                                 if clean_desc ~= "" then
                                     local exist_desc = existing_char.description or ""
                                     if not exist_desc:find(prefix, 1, true) then
-                                        existing_char.description = prefix .. clean_desc .. "\n\n" .. exist_desc
+                                        if exist_desc ~= "" then
+                                            existing_char.description = exist_desc .. "\n\n" .. prefix .. clean_desc
+                                        else
+                                            existing_char.description = prefix .. clean_desc
+                                        end
                                     end
+                                    existing_char.description = SeriesManager.reorderSeriesDescription(existing_char.description)
                                 end
                                 break
                             end
@@ -2120,8 +2148,13 @@ function M:mergeSeriesContext(cache_data, series_info)
                                 if clean_desc ~= "" then
                                     local exist_desc = existing_loc.description or ""
                                     if not exist_desc:find(prefix, 1, true) then
-                                        existing_loc.description = prefix .. clean_desc .. "\n\n" .. exist_desc
+                                        if exist_desc ~= "" then
+                                            existing_loc.description = exist_desc .. "\n\n" .. prefix .. clean_desc
+                                        else
+                                            existing_loc.description = prefix .. clean_desc
+                                        end
                                     end
+                                    existing_loc.description = SeriesManager.reorderSeriesDescription(existing_loc.description)
                                 end
                                 break
                             end
@@ -2154,8 +2187,13 @@ function M:mergeSeriesContext(cache_data, series_info)
                                 if clean_def ~= "" then
                                     local exist_def = existing_term.definition or ""
                                     if not exist_def:find(prefix, 1, true) then
-                                        existing_term.definition = prefix .. clean_def .. "\n\n" .. exist_def
+                                        if exist_def ~= "" then
+                                            existing_term.definition = exist_def .. "\n\n" .. prefix .. clean_def
+                                        else
+                                            existing_term.definition = prefix .. clean_def
+                                        end
                                     end
+                                    existing_term.definition = SeriesManager.reorderSeriesDescription(existing_term.definition)
                                 end
                                 break
                             end
@@ -2570,6 +2608,729 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
 
         processNextTask(1)
     end)
+end
+
+function M:checkpointHorizonScan()
+    local doc_file = (self.ui and self.ui.document) and self.ui.document.file
+    if not doc_file then return end
+    if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
+    if not self.book_data then self.book_data = {} end
+
+    local cache = self.book_data
+    cache.characters = self.characters or {}
+    cache.locations = self.locations or {}
+    cache.terms = self.terms or {}
+    cache.historical_figures = self.historical_figures or {}
+    cache.timeline = self.timeline or {}
+    cache.author_info = self.author_info or cache.author_info
+    cache.book_title = cache.book_title or (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps().title)
+    cache.book_author = cache.book_author or (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps().authors)
+
+    self.cache_manager:asyncSaveCache(doc_file, cache)
+end
+
+function M:buildCompactEntityManifest()
+    local lines = {}
+    local chars = self.characters or {}
+    if #chars > 0 then
+        table.insert(lines, "CHARACTERS:")
+        for _, c in ipairs(chars) do
+            local role, status, desc
+            if self.resolveEntityState then
+                role, status, desc = self:resolveEntityState(c)
+            else
+                role, status, desc = c.role, c.status or "alive", c.description
+            end
+            local aliases = (c.aliases and #c.aliases > 0) and (" (Aliases: " .. table.concat(c.aliases, ", ") .. ")") or ""
+            local desc_snippet = desc and (desc:sub(1, 280) .. (#desc > 280 and "..." or "")) or ""
+            table.insert(lines, string.format("- %s%s | Role: %s | Status: %s | %s", c.name or "?", aliases, role or "Unknown", status or "alive", desc_snippet))
+        end
+    end
+    local locs = self.locations or {}
+    if #locs > 0 then
+        table.insert(lines, "\nLOCATIONS:")
+        for _, l in ipairs(locs) do
+            local desc
+            if self.resolveEntityState then
+                local _, _, r_desc = self:resolveEntityState(l)
+                desc = r_desc
+            end
+            desc = desc or l.description
+            local desc_snippet = desc and (desc:sub(1, 150) .. (#desc > 150 and "..." or "")) or ""
+            table.insert(lines, string.format("- %s | %s", l.name or "?", desc_snippet))
+        end
+    end
+    local terms = self.terms or {}
+    if #terms > 0 then
+        table.insert(lines, "\nTERMS:")
+        for _, t in ipairs(terms) do
+            local desc
+            if self.resolveEntityState then
+                local _, _, r_desc = self:resolveEntityState(t)
+                desc = r_desc
+            end
+            desc = desc or t.description or t.definition
+            local desc_snippet = desc and (desc:sub(1, 150) .. (#desc > 150 and "..." or "")) or ""
+            table.insert(lines, string.format("- %s | %s", t.name or "?", desc_snippet))
+        end
+    end
+    if #lines == 0 then return "None" end
+    return table.concat(lines, "\n")
+end
+
+function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx)
+    if not delta_data or type(delta_data) ~= "table" then return end
+    chapter = chapter or {}
+    chapter_idx = chapter_idx or chapter.toc_index or 1
+    local ch_title = chapter.title or ("Chapter " .. tostring(chapter_idx))
+    local ch_page = tonumber(chapter.page)
+    local ch_xp = chapter.xpointer
+
+    self.characters = self.characters or {}
+    self.locations = self.locations or {}
+    self.terms = self.terms or {}
+    self.timeline = self.timeline or {}
+
+    local function norm(s)
+        if not s then return "" end
+        return tostring(s):lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    end
+
+    local function makeId(prefix, name)
+        local clean = (name or ""):lower():gsub("%s+", "_"):gsub("[^%w_]", "")
+        return prefix .. "_" .. (clean ~= "" and clean or tostring(os.time()))
+    end
+
+    local function findEntity(list, name, aliases)
+        local n_target = norm(name)
+        if n_target == "" then return nil end
+        for _, e in ipairs(list) do
+            if norm(e.name) == n_target then return e end
+            if e.aliases then
+                for _, a in ipairs(e.aliases) do
+                    if norm(a) == n_target then return e end
+                end
+            end
+            if aliases then
+                for _, a in ipairs(aliases) do
+                    if norm(e.name) == norm(a) then return e end
+                end
+            end
+        end
+        return nil
+    end
+
+    local function promotePriorEntity(existing)
+        if existing.source == "series_prior" then
+            existing.source = nil
+            existing.is_series = true
+            existing.sort_order = nil
+        end
+        if not existing.visible_from then
+            existing.visible_from = {
+                chapter_index = chapter_idx,
+                chapter_title = ch_title,
+                page_hint = ch_page,
+                xpointer = ch_xp
+            }
+        end
+    end
+
+    local function updateEntityDescPreservingPrior(existing, new_desc, key)
+        if not new_desc or new_desc == "" then return end
+        local field = key or "description"
+        local exist_desc = existing[field] or existing.description or ""
+        if type(exist_desc) == "string" and exist_desc:find("%[From Book [%d%.]+%]") then
+            local prior_parts = {}
+            for sec in (exist_desc .. "\n\n"):gmatch("(.-)\n%s*\n+") do
+                local trimmed = sec:match("^%s*(.-)%s*$")
+                if trimmed and trimmed:find("^%[From Book [%d%.]+%]") then
+                    table.insert(prior_parts, trimmed)
+                end
+            end
+            if #prior_parts > 0 then
+                local combined = SeriesManager.reorderSeriesDescription(new_desc .. "\n\n" .. table.concat(prior_parts, "\n\n"))
+                existing[field] = combined
+                if field ~= "description" then existing.description = combined end
+                return
+            end
+        end
+        existing[field] = new_desc
+        if field ~= "description" then existing.description = new_desc end
+    end
+
+    local function mergeAliases(existing, new_aliases)
+        if not new_aliases or type(new_aliases) ~= "table" then return end
+        existing.aliases = existing.aliases or {}
+        local seen_a = {}
+        for _, a in ipairs(existing.aliases) do seen_a[a:lower()] = true end
+        for _, a in ipairs(new_aliases) do
+            if a and a ~= "" and not seen_a[a:lower()] then
+                table.insert(existing.aliases, a)
+                seen_a[a:lower()] = true
+            end
+        end
+    end
+
+    -- 1. Characters: new
+    if delta_data.new_characters and type(delta_data.new_characters) == "table" then
+        for _, c in ipairs(delta_data.new_characters) do
+            if c.name and c.name ~= "" then
+                local existing = findEntity(self.characters, c.name, c.aliases)
+                if existing then
+                    promotePriorEntity(existing)
+                    mergeAliases(existing, c.aliases)
+                    existing.states = existing.states or {}
+                    table.insert(existing.states, {
+                        chapter_index = chapter_idx,
+                        chapter_title = ch_title,
+                        page_hint = ch_page,
+                        xpointer = ch_xp,
+                        role = c.role or existing.role,
+                        status = c.status or existing.status or "alive",
+                        description = c.description or existing.description,
+                        evidence = c.evidence or ""
+                    })
+                    if c.role and c.role ~= "" then existing.role = c.role end
+                    if c.status and c.status ~= "" then existing.status = c.status end
+                    updateEntityDescPreservingPrior(existing, c.description)
+                else
+                    local new_char = {
+                        id = c.id or makeId("char", c.name),
+                        name = c.name,
+                        aliases = c.aliases or {},
+                        role = c.role or "Character",
+                        status = c.status or "alive",
+                        description = c.description or "",
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                role = c.role or "Character",
+                                status = c.status or "alive",
+                                description = c.description or "",
+                                evidence = c.evidence or ""
+                            }
+                        }
+                    }
+                    table.insert(self.characters, new_char)
+                end
+            end
+        end
+    end
+
+    -- 2. Characters: state updates
+    if delta_data.character_state_updates and type(delta_data.character_state_updates) == "table" then
+        for _, u in ipairs(delta_data.character_state_updates) do
+            if u.name and u.name ~= "" then
+                local existing = findEntity(self.characters, u.name, u.aliases)
+                if existing then
+                    promotePriorEntity(existing)
+                    mergeAliases(existing, u.aliases)
+                    existing.states = existing.states or {}
+                    local already_has_chapter_state = false
+                    for _, s in ipairs(existing.states) do
+                        if s.chapter_index == chapter_idx then
+                            already_has_chapter_state = true
+                            if u.role and u.role ~= "" then s.role = u.role end
+                            if u.status and u.status ~= "" then s.status = u.status end
+                            if u.change and u.change ~= "" then s.change = u.change end
+                            if u.description and u.description ~= "" then s.description = u.description end
+                            if u.evidence and u.evidence ~= "" then s.evidence = u.evidence end
+                            break
+                        end
+                    end
+                    if not already_has_chapter_state then
+                        table.insert(existing.states, {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp,
+                            role = u.role or existing.role,
+                            status = u.status or existing.status or "alive",
+                            change = u.change or "",
+                            description = u.description or existing.description,
+                            evidence = u.evidence or ""
+                        })
+                    end
+                    if u.role and u.role ~= "" then existing.role = u.role end
+                    if u.status and u.status ~= "" then existing.status = u.status end
+                    updateEntityDescPreservingPrior(existing, u.description)
+                end
+            end
+        end
+    end
+
+    -- 3. Locations: new & updates
+    if delta_data.new_locations and type(delta_data.new_locations) == "table" then
+        for _, l in ipairs(delta_data.new_locations) do
+            if l.name and l.name ~= "" then
+                local existing = findEntity(self.locations, l.name)
+                if existing then
+                    promotePriorEntity(existing)
+                    existing.states = existing.states or {}
+                    table.insert(existing.states, {
+                        chapter_index = chapter_idx,
+                        chapter_title = ch_title,
+                        page_hint = ch_page,
+                        xpointer = ch_xp,
+                        description = l.description or existing.description,
+                        evidence = l.evidence or ""
+                    })
+                    updateEntityDescPreservingPrior(existing, l.description)
+                else
+                    table.insert(self.locations, {
+                        id = l.id or makeId("loc", l.name),
+                        name = l.name,
+                        description = l.description or "",
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                description = l.description or "",
+                                evidence = l.evidence or ""
+                            }
+                        }
+                    })
+                end
+            end
+        end
+    end
+    if delta_data.location_state_updates and type(delta_data.location_state_updates) == "table" then
+        for _, u in ipairs(delta_data.location_state_updates) do
+            if u.name and u.name ~= "" then
+                local existing = findEntity(self.locations, u.name)
+                if existing then
+                    promotePriorEntity(existing)
+                    existing.states = existing.states or {}
+                    table.insert(existing.states, {
+                        chapter_index = chapter_idx,
+                        chapter_title = ch_title,
+                        page_hint = ch_page,
+                        xpointer = ch_xp,
+                        change = u.change or "",
+                        description = u.description or existing.description,
+                        evidence = u.evidence or ""
+                    })
+                    updateEntityDescPreservingPrior(existing, u.description)
+                end
+            end
+        end
+    end
+
+    -- 4. Terms: new & updates
+    if delta_data.new_terms and type(delta_data.new_terms) == "table" then
+        for _, t in ipairs(delta_data.new_terms) do
+            if t.name and t.name ~= "" then
+                local existing = findEntity(self.terms, t.name)
+                if existing then
+                    promotePriorEntity(existing)
+                    existing.states = existing.states or {}
+                    local desc = t.description or t.definition or existing.description or existing.definition
+                    table.insert(existing.states, {
+                        chapter_index = chapter_idx,
+                        chapter_title = ch_title,
+                        page_hint = ch_page,
+                        xpointer = ch_xp,
+                        description = desc,
+                        evidence = t.evidence or ""
+                    })
+                    updateEntityDescPreservingPrior(existing, desc, "definition")
+                else
+                    table.insert(self.terms, {
+                        id = t.id or makeId("term", t.name),
+                        name = t.name,
+                        definition = t.description or t.definition or "",
+                        description = t.description or t.definition or "",
+                        visible_from = {
+                            chapter_index = chapter_idx,
+                            chapter_title = ch_title,
+                            page_hint = ch_page,
+                            xpointer = ch_xp
+                        },
+                        states = {
+                            {
+                                chapter_index = chapter_idx,
+                                chapter_title = ch_title,
+                                page_hint = ch_page,
+                                xpointer = ch_xp,
+                                description = t.description or t.definition or "",
+                                evidence = t.evidence or ""
+                            }
+                        }
+                    })
+                end
+            end
+        end
+    end
+    if delta_data.term_state_updates and type(delta_data.term_state_updates) == "table" then
+        for _, u in ipairs(delta_data.term_state_updates) do
+            if u.name and u.name ~= "" then
+                local existing = findEntity(self.terms, u.name)
+                if existing then
+                    promotePriorEntity(existing)
+                    existing.states = existing.states or {}
+                    local desc = u.description or u.definition or existing.description or existing.definition
+                    table.insert(existing.states, {
+                        chapter_index = chapter_idx,
+                        chapter_title = ch_title,
+                        page_hint = ch_page,
+                        xpointer = ch_xp,
+                        change = u.change or "",
+                        description = desc,
+                        evidence = u.evidence or ""
+                    })
+                    updateEntityDescPreservingPrior(existing, desc, "definition")
+                end
+            end
+        end
+    end
+
+    -- 5. Timeline Event
+    if delta_data.timeline_event and delta_data.timeline_event.event and delta_data.timeline_event.event ~= "" then
+        local ev_title = delta_data.timeline_event.chapter or ch_title
+        local already_has_ev = false
+        for _, ev in ipairs(self.timeline) do
+            if ev.chapter == ev_title and ((ev.page and ch_page and ev.page == ch_page) or (ev.chapter_index and ev.chapter_index == chapter_idx)) then
+                already_has_ev = true
+                break
+            end
+        end
+        if not already_has_ev then
+            table.insert(self.timeline, {
+                chapter = ev_title,
+                event = delta_data.timeline_event.event,
+                chapter_index = chapter_idx,
+                page = ch_page
+            })
+        end
+    end
+
+    -- Mark chapter as fetched
+    self.chapters_fetched = self.chapters_fetched or {}
+    local unique_id = ch_title .. "_" .. tostring(ch_page)
+    self.chapters_fetched[unique_id] = true
+
+    -- Checkpoint immediately
+    self:checkpointHorizonScan()
+end
+
+function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_progress, on_done)
+    if not target_chapter_indices or #target_chapter_indices == 0 then
+        if on_done then on_done(true) end
+        return
+    end
+
+    self.chapters_fetched = self.chapters_fetched or {}
+
+    -- Resolve raw TOC
+    local raw_toc
+    if self.ui and self.ui.document and self.ui.document.getToc then
+        pcall(function() raw_toc = self.ui.document:getToc() end)
+    end
+    local toc = utils:flattenTOC(raw_toc) or {}
+
+    -- Normalize target chapters into an array of chapter descriptors
+    local queue = {}
+    for _, item in ipairs(target_chapter_indices) do
+        local ch = nil
+        local idx = nil
+        if type(item) == "table" then
+            ch = item
+            idx = item.toc_index
+            if not idx then
+                for ti, tc in ipairs(toc) do
+                    if tc == item or (tc.title == item.title and tc.page == item.page) then
+                        idx = ti
+                        break
+                    end
+                end
+            end
+        elseif type(item) == "number" then
+            idx = item
+            ch = toc[item]
+        end
+        if ch then
+            ch.toc_index = idx or ch.toc_index or 1
+            table.insert(queue, ch)
+        end
+    end
+
+    if #queue == 0 then
+        if on_done then on_done(true) end
+        return
+    end
+
+    self.active_sequential_queue = queue
+    self.active_sequential_is_manual = is_manual
+    self.active_sequential_on_progress = on_progress
+    self.active_sequential_on_done = on_done
+    self.active_sequential_total = #queue
+    self.active_sequential_completed = 0
+    self.active_sequential_cancelled = false
+
+    -- If a scan is already running, re-targeting the queue is sufficient;
+    -- the running step will pick up from the new active_sequential_queue when finished.
+    if self.is_sequential_scan_active then
+        self:log("XRayPlugin: Re-targeted active sequential scan queue with " .. tostring(#queue) .. " chapters.")
+        return
+    end
+
+    self.is_sequential_scan_active = true
+
+    local function finishScan(success)
+        self.is_sequential_scan_active = false
+        self.active_sequential_queue = nil
+        local cb = self.active_sequential_on_done
+        self.active_sequential_on_done = nil
+        self.active_sequential_on_progress = nil
+        if cb then cb(success) end
+        if success then
+            pcall(function()
+                local cur_p = self.ui and self.ui.getCurrentPage and self.ui:getCurrentPage() or 1
+                local tot_p = self.ui and self.ui.document and self.ui.document.getPageCount and self.ui.document:getPageCount() or 1
+                local r_pct = tot_p and tot_p > 0 and math.floor((cur_p / tot_p) * 100) or 100
+                self:runPostFetchDuplicateCheck(nil, nil, r_pct, true)
+            end)
+        end
+    end
+
+    local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
+    local MAX_BATCH_CHAPTERS = 3
+    local MAX_BATCH_CHARS = 45000
+
+    local function processNext()
+        if self.destroyed or not self.ui or not self.ui.document or self.active_sequential_cancelled then
+            finishScan(false)
+            return
+        end
+
+        local q = self.active_sequential_queue
+        if not q or #q == 0 then
+            finishScan(true)
+            return
+        end
+
+        local cur_page = self.getCurrentDocPage and self:getCurrentDocPage() or nil
+        local batch_items = {}
+        local total_batch_chars = 0
+
+        while #q > 0 and #batch_items < MAX_BATCH_CHAPTERS do
+            local candidate = q[1]
+            local cand_idx = candidate.toc_index or 1
+            local cand_id = (candidate.title or ("Chapter " .. tostring(cand_idx))) .. "_" .. tostring(candidate.page)
+
+            if self.chapters_fetched[cand_id] then
+                table.remove(q, 1)
+                self.active_sequential_completed = self.active_sequential_completed + 1
+                if self.active_sequential_on_progress then
+                    self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
+                end
+            else
+                -- Find next chapter in TOC for bounding candidate
+                local next_chapter = nil
+                for ti = cand_idx + 1, #toc do
+                    local tc = toc[ti]
+                    if tc and not (self.isNonNarrativeChapter and self:isNonNarrativeChapter(tc.title or "")) then
+                        next_chapter = tc
+                        break
+                    end
+                end
+
+                local ch_text = ChapterAnalyzer:getSingleChapterText(self.ui, candidate, next_chapter, cur_page, 50000)
+                if not ch_text or #ch_text < 100 then
+                    self:log("XRayPlugin: Chapter text empty or too short, skipping: " .. tostring(candidate.title))
+                    table.remove(q, 1)
+                    self.chapters_fetched[cand_id] = true
+                    self.active_sequential_completed = self.active_sequential_completed + 1
+                    if self.active_sequential_on_progress then
+                        self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
+                    end
+                else
+                    if #batch_items > 0 and (total_batch_chars + #ch_text) > MAX_BATCH_CHARS then
+                        -- Reached character budget for this batch, process current batch first
+                        break
+                    end
+                    table.remove(q, 1)
+                    candidate.text = ch_text
+                    candidate.unique_id = cand_id
+                    table.insert(batch_items, candidate)
+                    total_batch_chars = total_batch_chars + #ch_text
+                end
+            end
+        end
+
+        if #batch_items == 0 then
+            if #q > 0 then
+                UIManager:scheduleIn(0.1, processNext)
+            else
+                finishScan(true)
+            end
+            return
+        end
+
+        local props = (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps()) or {}
+        local title = props.title or "Book"
+        local author = props.authors or props.author or "Author"
+        local manifest = self:buildCompactEntityManifest()
+
+        local prompt, err
+        if #batch_items == 1 and not (self.ai_helper.prompts and self.ai_helper.prompts.batch_chapter_delta) then
+            prompt, err = self.ai_helper:buildChapterDeltaPrompt(title, author, batch_items[1].title, manifest, batch_items[1].text)
+        else
+            prompt, err = self.ai_helper:buildBatchChapterDeltaPrompt(title, author, batch_items, manifest)
+            if not prompt then
+                prompt, err = self.ai_helper:buildChapterDeltaPrompt(title, author, batch_items[1].title, manifest, batch_items[1].text)
+            end
+        end
+
+        if not prompt then
+            self:log("XRayPlugin: Failed to build chapter delta prompt: " .. tostring(err))
+            finishScan(false)
+            return
+        end
+
+        local req_params, req_err = self.ai_helper:buildComprehensiveRequest(nil, nil, nil, prompt)
+        if not req_params then
+            self:log("XRayPlugin: Failed to build comprehensive request: " .. tostring(req_err))
+            finishScan(false)
+            return
+        end
+
+        self.active_sequential_current_batch = batch_items
+        self.active_sequential_batch_start_time = os.time()
+        self.active_sequential_status = "Waiting for AI response..."
+
+        local first_idx = batch_items[1].toc_index or 1
+        local DataStorage = require("datastorage")
+        local settings_xray_dir = DataStorage:getSettingsDir() .. "/xray"
+        local result_file = settings_xray_dir .. "/bg_delta_" .. tostring(os.time()) .. "_" .. tostring(first_idx) .. ".json"
+
+        local pid = self.ai_helper:makeRequestAsync(req_params, result_file)
+        if not pid then
+            self:log("XRayPlugin: Failed to start async AI request for batch starting at chapter " .. tostring(first_idx))
+            pcall(function() os.remove(result_file) end)
+            finishScan(false)
+            return
+        end
+
+        local start_t = os.time()
+        local timeout = 300
+        local function pollResult()
+            if self.destroyed or self.active_sequential_cancelled then
+                pcall(function() os.remove(result_file) end)
+                finishScan(false)
+                return
+            end
+            local data, p_err = self.ai_helper:checkAsyncResult(result_file, pid)
+            if data == nil then
+                if os.time() - start_t < timeout then
+                    UIManager:scheduleIn(2, pollResult)
+                else
+                    pcall(function() os.remove(result_file) end)
+                    self:log("XRayPlugin: Sequential chapter scan timed out for batch starting at: " .. tostring(batch_items[1].title))
+                    finishScan(false)
+                end
+            else
+                pcall(function() os.remove(result_file) end)
+                if type(data) == "table" then
+                    self.active_sequential_status = "Merging delta results..."
+                    if data.chapters and type(data.chapters) == "table" then
+                        -- Multi-chapter response
+                        for _, ch_delta in ipairs(data.chapters) do
+                            local target_item = nil
+                            local target_idx = ch_delta.chapter_index
+                            if target_idx then
+                                for _, bi in ipairs(batch_items) do
+                                    if (bi.toc_index or bi.chapter_index) == target_idx then
+                                        target_item = bi
+                                        break
+                                    end
+                                end
+                            end
+                            if not target_item and ch_delta.chapter_title then
+                                for _, bi in ipairs(batch_items) do
+                                    if bi.title == ch_delta.chapter_title then
+                                        target_item = bi
+                                        break
+                                    end
+                                end
+                            end
+                            target_item = target_item or batch_items[1]
+                            local resolved_idx = target_item.toc_index or target_idx or 1
+                            self:mergeSequentialChapterDelta(ch_delta, target_item, resolved_idx)
+                        end
+                    else
+                        -- Single-chapter fallback response
+                        self:mergeSequentialChapterDelta(data, batch_items[1], batch_items[1].toc_index or 1)
+                    end
+
+                    for _, bi in ipairs(batch_items) do
+                        self.chapters_fetched[bi.unique_id] = true
+                        self.active_sequential_completed = self.active_sequential_completed + 1
+                    end
+                    self.active_sequential_status = "Batch completed. Pacing..."
+                    if self.active_sequential_on_progress then
+                        self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
+                    end
+
+                    -- 3s pacing cooldown between batches to prevent rate limits (HTTP 429)
+                    UIManager:scheduleIn(3, processNext)
+                else
+                    local retry_count = batch_items._retries or 0
+                    if retry_count < 2 then
+                        batch_items._retries = retry_count + 1
+                        self:log(string.format("XRayPlugin: Batch failed (%s). Re-queuing to retry in 5s (attempt %d/2)...", tostring(p_err), retry_count + 1))
+                        self.active_sequential_status = string.format("Temporary error (%s). Retrying in 5s...", tostring(p_err))
+                        for i = #batch_items, 1, -1 do
+                            table.insert(q, 1, batch_items[i])
+                        end
+                        UIManager:scheduleIn(5, processNext)
+                    else
+                        self:log(string.format("XRayPlugin: Batch failed after %d retries (%s). Advancing queue.", retry_count, tostring(p_err)))
+                        self.active_sequential_status = "Batch skipped after repeated errors. Advancing..."
+                        for _, bi in ipairs(batch_items) do
+                            self.chapters_fetched[bi.unique_id] = true
+                            self.active_sequential_completed = self.active_sequential_completed + 1
+                        end
+                        if self.active_sequential_on_progress then
+                            self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
+                        end
+                        UIManager:scheduleIn(3, processNext)
+                    end
+                end
+            end
+        end
+
+        UIManager:scheduleIn(2, pollResult)
+    end
+
+    processNext()
+end
+
+function M:cancelSequentialChapterScan()
+    self.active_sequential_cancelled = true
+    self.active_sequential_queue = nil
+    self.active_sequential_current_batch = nil
+    self.active_sequential_batch_start_time = nil
+    self.active_sequential_status = nil
+    self.is_sequential_scan_active = false
 end
 
 return M

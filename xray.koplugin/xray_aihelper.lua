@@ -1638,6 +1638,7 @@ function AIHelper:loadSettings()
 
     -- Migrate retired Claude model names to modern active equivalents
     local claude_model_map = {
+        ["claude-sonnet-5.5"]        = "claude-sonnet-5-5",
         ["claude-3-7-sonnet-latest"] = "claude-sonnet-5",
         ["claude-3-7-sonnet"]        = "claude-sonnet-5",
         ["claude-3.7-sonnet"]        = "claude-sonnet-5",
@@ -2820,6 +2821,63 @@ function AIHelper:detectBookTypeAsync(title, author, series, description, result
 
     local pid = self:makeRequestAsync(requests, result_file)
     return pid
+end
+
+function AIHelper:buildChapterDeltaPrompt(title, author, chapter_title, manifest_text, chapter_text)
+    if not self.prompts then self:loadLanguage() end
+    local template = self.prompts and self.prompts.chapter_delta
+    if not template then
+        local en_prompts = require(plugin_path .. "prompts/en")
+        template = en_prompts and en_prompts.chapter_delta
+    end
+    if not template then
+        return nil, "no_prompt", "chapter_delta prompt missing"
+    end
+
+    local prompt = string.format(template,
+        title or "Unknown",
+        author or "Unknown",
+        chapter_title or "Current Chapter",
+        manifest_text or "None",
+        chapter_title or "Current Chapter",
+        chapter_text or ""
+    )
+    return self:sanitize_utf8(prompt)
+end
+
+function AIHelper:buildBatchChapterDeltaPrompt(title, author, batch_chapters, manifest_text)
+    if not self.prompts then self:loadLanguage() end
+    local template = self.prompts and self.prompts.batch_chapter_delta
+    if not template then
+        local en_prompts = require(plugin_path .. "prompts/en")
+        template = en_prompts and en_prompts.batch_chapter_delta
+    end
+    if not template then
+        return nil, "no_prompt", "batch_chapter_delta prompt missing"
+    end
+
+    batch_chapters = batch_chapters or {}
+    local summary_parts = {}
+    local text_blocks = {}
+    for _, ch in ipairs(batch_chapters) do
+        local ch_idx = ch.toc_index or ch.chapter_index or 1
+        local ch_title = ch.title or ("Chapter " .. tostring(ch_idx))
+        table.insert(summary_parts, string.format("[%d] %s", ch_idx, ch_title))
+        local block = string.format("=== CHAPTER %d: %s ===\n%s", ch_idx, ch_title, ch.text or "")
+        table.insert(text_blocks, block)
+    end
+
+    local chapters_summary = table.concat(summary_parts, ", ")
+    local combined_texts = table.concat(text_blocks, "\n\n")
+
+    local prompt = string.format(template,
+        title or "Unknown",
+        author or "Unknown",
+        chapters_summary ~= "" and chapters_summary or "None",
+        manifest_text or "None",
+        combined_texts
+    )
+    return self:sanitize_utf8(prompt)
 end
 
 -- Import API keys from a plain text file (e.g. xray_key.txt at storage root or settings dir)

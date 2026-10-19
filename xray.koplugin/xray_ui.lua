@@ -1287,6 +1287,19 @@ function M:newMenu(var_name, args)
     args._xray_highlight = true
     local menu = Menu:new(args)
     menu._xray_highlight = true
+
+    -- Ensure dynamic submenus with sub_item_table_func work in standalone Menu
+    local orig_onMenuSelect = menu.onMenuSelect
+    menu.onMenuSelect = function(this, item)
+        if type(item.sub_item_table_func) == "function" then
+            item.sub_item_table = item.sub_item_table_func()
+        end
+        if orig_onMenuSelect then
+            return orig_onMenuSelect(this, item)
+        end
+        return true
+    end
+
     -- Lazily patch the private MenuItem class via the live item_group
     _patchMenuItemClass(menu.item_group)
     -- Attach pagination buttons to FocusManager layout
@@ -4431,6 +4444,14 @@ function M:showQuickXRayMenu()
 end
 
 function M:showFullXRayMenu()
+    if self.openReaderMenuToPath and self.ui and self.ui.menu then
+        self:openReaderMenuToPath("xray")
+        return
+    end
+    self:showFullXRayMenuStandalone()
+end
+
+function M:showFullXRayMenuStandalone()
     if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
     self.xray_menu = self:newMenu("xray_menu", { 
         title = self.loc:t("menu_xray") or "X-Ray", 

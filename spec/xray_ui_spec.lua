@@ -1947,6 +1947,39 @@ describe("xray_ui", function()
             assert.are.equal("Menu", last.type)
         end)
 
+        it("should route showFullXRayMenu to openReaderMenuToPath when ui.menu is present", function()
+            local opened_path = nil
+            plugin.openReaderMenuToPath = function(self, path)
+                opened_path = path
+            end
+            plugin.ui.menu = {
+                tab_item_table = {}
+            }
+            plugin:showFullXRayMenu()
+            assert.are.equal("xray", opened_path)
+            plugin.ui.menu = nil
+        end)
+
+        it("should evaluate dynamic sub_item_table_func on Menu:onMenuSelect in standalone newMenu", function()
+            local dynamic_called = false
+            local dynamic_items = { { text = "Provider Sub Item" } }
+            local test_item = {
+                text = "API Keys",
+                sub_item_table_func = function()
+                    dynamic_called = true
+                    return dynamic_items
+                end,
+            }
+            local menu = plugin:newMenu("test_menu", {
+                title = "Test Menu",
+                item_table = { test_item },
+            })
+            assert.is_not_nil(menu)
+            menu:onMenuSelect(test_item)
+            assert.is_true(dynamic_called)
+            assert.are.equal(dynamic_items, test_item.sub_item_table)
+        end)
+
         it("should render showConfigFileGuide dialog with import and wiki options", function()
             plugin:showConfigFileGuide()
             local last = _G.ui_tracker.last_shown

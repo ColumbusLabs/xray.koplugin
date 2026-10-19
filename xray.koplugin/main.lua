@@ -2529,6 +2529,9 @@ end
 -- Resolves the exact touch menu path (e.g. "4.1.8.6") to an X-Ray submenu
 local function findXRayMenuPath(self, target_key)
     if not self.ui or not self.ui.menu then return nil end
+    if not target_key or target_key == "xray" then
+        return "xray"
+    end
     local reader_menu = self.ui.menu
     if not reader_menu.tab_item_table then
         reader_menu:setUpdateItemTable()
@@ -2582,18 +2585,75 @@ end
 
 function XRayPlugin:openReaderMenuToPath(target_key)
     local UIManager = require("ui/uimanager")
+    if self.xray_menu then
+        pcall(function() UIManager:close(self.xray_menu) end)
+        self.xray_menu = nil
+    end
+
     UIManager:scheduleIn(0.1, function()
         if self.destroyed or not self.ui or not self.ui.document then return end
-        if self.ui and self.ui.menu then
-            if not self.ui.menu.menu_container then
-                self.ui.menu:onShowMenu()
+        if not (self.ui and self.ui.menu) then
+            if self.showFullXRayMenuStandalone then
+                self:showFullXRayMenuStandalone()
             end
-            local touch_menu = self.ui.menu.menu_container and self.ui.menu.menu_container[1]
-            if touch_menu then
-                local path = findXRayMenuPath(self, target_key)
-                if path then
-                    touch_menu:openMenu(path, false)
+            return
+        end
+
+        local reader_menu = self.ui.menu
+        if not reader_menu.tab_item_table then
+            reader_menu:setUpdateItemTable()
+        end
+        local tab_item_table = reader_menu.tab_item_table
+        if not tab_item_table then
+            if self.showFullXRayMenuStandalone then
+                self:showFullXRayMenuStandalone()
+            end
+            return
+        end
+
+        local xray_tab_idx, xray_item_idx, xray_item
+        for tab_idx, tab_items in ipairs(tab_item_table) do
+            for item_idx, item in ipairs(tab_items) do
+                if item.id == "xray" then
+                    xray_tab_idx = tab_idx
+                    xray_item_idx = item_idx
+                    xray_item = item
+                    break
                 end
+            end
+            if xray_tab_idx then break end
+        end
+
+        if not xray_tab_idx or not xray_item then
+            self:log("XRayPlugin: Unable to locate X-Ray in reader menu, falling back to standalone menu")
+            if self.showFullXRayMenuStandalone then
+                self:showFullXRayMenuStandalone()
+            end
+            return
+        end
+
+        if not reader_menu.menu_container then
+            reader_menu:onShowMenu(xray_tab_idx)
+        end
+
+        local touch_menu = reader_menu.menu_container and reader_menu.menu_container[1]
+        if not touch_menu then return end
+
+        if not target_key or target_key == "xray" then
+            if touch_menu.switchMenuTab then
+                touch_menu:switchMenuTab(xray_tab_idx)
+                if touch_menu.bar and touch_menu.bar.switchToTab then
+                    touch_menu.bar:switchToTab(xray_tab_idx)
+                end
+            end
+            xray_item.idx = xray_item.idx or xray_item_idx
+            if touch_menu.onMenuSelect then
+                touch_menu:onMenuSelect(xray_item)
+            end
+        else
+            local path = findXRayMenuPath(self, target_key)
+            if path and touch_menu.openMenu then
+                touch_menu:openMenu(path, false)
             end
         end
     end)

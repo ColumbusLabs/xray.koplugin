@@ -708,12 +708,29 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui, max_page)
             pcall(function() max_page = ui.document:getCurrentPage() end)
         end
     end
+    max_page = tonumber(max_page)
     
     -- Try to get annotations from the document/UI
     -- In KOReader, annotations are typically in ui.annotation.annotations
-    if ui.annotation and ui.annotation.annotations then
+    if ui and ui.annotation and ui.annotation.annotations then
         for _, annot in ipairs(ui.annotation.annotations) do
-            local annot_page = annot.page or (annot.pos0 and annot.pos0.page)
+            local annot_page = tonumber(annot.page)
+            if not annot_page and type(annot.page) == "string" and ui.document and type(ui.document.getPageFromXPointer) == "function" then
+                local ok, resolved = pcall(ui.document.getPageFromXPointer, ui.document, annot.page)
+                if ok then
+                    annot_page = tonumber(resolved)
+                end
+            end
+            if not annot_page then
+                annot_page = tonumber(annot.pageno)
+                    or (type(annot.pos0) == "table" and tonumber(annot.pos0.page))
+            end
+            if not annot_page and type(annot.pos0) == "string" and ui.document and type(ui.document.getPageFromXPointer) == "function" then
+                local ok, resolved = pcall(ui.document.getPageFromXPointer, ui.document, annot.pos0)
+                if ok then
+                    annot_page = tonumber(resolved)
+                end
+            end
             if not max_page or not annot_page or annot_page <= max_page then
                 if annot.text and #annot.text > 0 then
                     annotations_text = annotations_text .. "Highlight: " .. annot.text .. "\n"

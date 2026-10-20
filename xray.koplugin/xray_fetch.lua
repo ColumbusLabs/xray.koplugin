@@ -718,7 +718,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
             local is_full_book = (reading_percent == 100 and not batch_end_page)
             local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(
                 self.ui, 200, 150000, is_full_book, first_missing_page, known_chapters, current_page)
-            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui, end_page_analysis or current_page)
+            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui, current_page)
 
             if (not book_text or #book_text < 10) and not samples then
                 if wait_msg then UIManager:close(wait_msg) end

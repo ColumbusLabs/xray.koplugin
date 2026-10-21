@@ -142,7 +142,7 @@ function M:fetchSingleWord(text, pos0, pos1)
                 local err_dlg
                 err_dlg = ButtonDialog:new{
                     modal = true,
-                    title = title,
+                    title = title .. "\n\n" .. text_msg,
                     text = text_msg,
                     buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_dlg then UIManager:close(err_dlg) end end }}}
                 }
@@ -171,10 +171,11 @@ function M:fetchSingleWord(text, pos0, pos1)
                 UIManager:show(InfoMessage:new{ text = notify_user, timeout = 5 })
             end
         end
+        local lookup_sub = text .. "\n\n" .. (self.loc:t("fetching_wait") or "This may take a moment.\nTap Cancel to stop.")
         progress_msg = ButtonDialog:new{
             modal = true,
-            title = self.loc:t("looking_up_msg", _truncateSafe(text, 30)),
-            text = text .. "\n\n" .. (self.loc:t("fetching_wait") or "This may take a moment.\nTap Cancel to stop."),
+            title = self.loc:t("looking_up_msg", _truncateSafe(text, 30)) .. "\n\n" .. lookup_sub,
+            text = lookup_sub,
             tap_close_callback = function() cancelLookup("Single word lookup cancelled by user") end,
             buttons = {{{
                 text = self.loc:t("cancel") or "Cancel",
@@ -280,7 +281,7 @@ function M:fetchSingleWord(text, pos0, pos1)
                 local err_dlg
                 err_dlg = ButtonDialog:new{
                     modal = true,
-                    title = title,
+                    title = title .. "\n\n" .. text_msg,
                     text = text_msg,
                     buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_dlg then UIManager:close(err_dlg) end end }}}
                 }
@@ -312,7 +313,7 @@ function M:fetchSingleWord(text, pos0, pos1)
                         local err_dlg
                         err_dlg = ButtonDialog:new{
                             modal = true,
-                            title = title,
+                            title = title .. "\n\n" .. text_msg,
                             text = text_msg,
                             buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_dlg then UIManager:close(err_dlg) end end }}}
                         }
@@ -328,7 +329,7 @@ function M:fetchSingleWord(text, pos0, pos1)
                     local err_dlg
                     err_dlg = ButtonDialog:new{
                         modal = true,
-                        title = title,
+                        title = title .. "\n\n" .. text_msg,
                         text = text_msg,
                         buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_dlg then UIManager:close(err_dlg) end end }}}
                     }
@@ -606,10 +607,11 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
         local fetch_text = is_update
             and (self.loc:t("updating_ai", self.ai_provider or "AI") or "Updating X-Ray...")
             or  (self.loc:t("fetching_ai",  self.ai_provider or "AI") or "Fetching X-Ray...")
+        local wait_sub = title .. "\n\n" .. (self.loc:t("fetching_wait") or "This may take a moment.\nTap Cancel to stop.")
         wait_msg = ButtonDialog:new{
             modal = true,
-            title = fetch_text,
-            text  = title .. "\n\n" .. (self.loc:t("fetching_wait") or "This may take a moment.\nTap Cancel to stop."),
+            title = fetch_text .. "\n\n" .. wait_sub,
+            text  = wait_sub,
             tap_close_callback = function()
                 cancelActiveRequest("Fetch cancelled by user")
             end,
@@ -764,7 +766,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
                         local title, text = utils:getFriendlyError(err_code, err_msg, self.loc)
                         local err_box
                         err_box = ButtonDialog:new{
-                            title = title,
+                            title = title .. "\n\n" .. text,
                             text = text,
                             buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_box then UIManager:close(err_box) end end }}}
                         }
@@ -829,7 +831,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
                             local err_box
                             err_box = ButtonDialog:new{
                                 modal = true,
-                                title = title,
+                                title = title .. "\n\n" .. text,
                                 text = text,
                                 buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_box then UIManager:close(err_box) end end }}}
                             }
@@ -847,7 +849,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
                         local err_box
                         err_box = ButtonDialog:new{
                             modal = true,
-                            title = title,
+                            title = title .. "\n\n" .. text,
                             text = text,
                             buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_box then UIManager:close(err_box) end end }}}
                         }
@@ -1681,10 +1683,12 @@ function M:fetchMoreEntities(entity_type)
                 if os.time() - request_started_at > request_timeout then
                     cancelActiveRequest("Fetch timed out")
                     local to_dlg
+                    local to_title = self.loc:t("error") or "Error"
+                    local to_text = self.loc:t("error_timeout") or "Request timed out"
                     to_dlg = ButtonDialog:new{
                         modal = true,
-                        title = self.loc:t("error") or "Error",
-                        text = self.loc:t("error_timeout") or "Request timed out",
+                        title = to_title .. "\n\n" .. to_text,
+                        text = to_text,
                         buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if to_dlg then UIManager:close(to_dlg) end end }}}
                     }
                     UIManager:show(to_dlg)
@@ -1965,10 +1969,12 @@ function M:fetchAuthorInfo()
             if os.time() - request_started_at > request_timeout then
                 cancelActiveRequest("Author fetch timed out")
                 local to_dlg
+                local to_title = self.loc:t("error") or "Error"
+                local to_text = self.loc:t("error_timeout") or "Request timed out"
                 to_dlg = ButtonDialog:new{
                     modal = true,
-                    title = self.loc:t("error") or "Error",
-                    text = self.loc:t("error_timeout") or "Request timed out",
+                    title = to_title .. "\n\n" .. to_text,
+                    text = to_text,
                     buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if to_dlg then UIManager:close(to_dlg) end end }}}
                 }
                 UIManager:show(to_dlg)
@@ -2585,7 +2591,7 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
                             local err_box
                             err_box = ButtonDialog:new{
                                 modal = true,
-                                title = err_title,
+                                title = err_title .. "\n\n" .. err_text,
                                 text = err_text,
                                 buttons = {{{ text = self.loc:t("ok") or "OK", callback = function() if err_box then UIManager:close(err_box) end end }}}
                             }
@@ -2644,6 +2650,8 @@ function M:checkpointHorizonScan()
     cache.images = (self.images and #self.images > 0 and self.images) or cache.images or (self.book_data and self.book_data.images)
 
     self.cache_manager:asyncSaveCache(doc_file, cache)
+    self:log(string.format("XRayPlugin: Checkpoint saved - Cache totals: %d characters, %d locations, %d terms, %d timeline events.",
+        #(self.characters or {}), #(self.locations or {}), #(self.terms or {}), #(self.timeline or {})))
 end
 
 function M:buildCompactEntityManifest()
@@ -2707,6 +2715,11 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
     self.locations = self.locations or {}
     self.terms = self.terms or {}
     self.timeline = self.timeline or {}
+
+    local new_chars, updated_chars = 0, 0
+    local new_locs, updated_locs = 0, 0
+    local new_terms, updated_terms = 0, 0
+    local new_events = 0
 
     local function norm(s)
         if not s then return "" end
@@ -2795,6 +2808,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if c.name and c.name ~= "" then
                 local existing = findEntity(self.characters, c.name, c.aliases)
                 if existing then
+                    updated_chars = updated_chars + 1
                     promotePriorEntity(existing)
                     mergeAliases(existing, c.aliases)
                     existing.states = existing.states or {}
@@ -2812,6 +2826,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     if c.status and c.status ~= "" then existing.status = c.status end
                     updateEntityDescPreservingPrior(existing, c.description)
                 else
+                    new_chars = new_chars + 1
                     local new_char = {
                         id = c.id or makeId("char", c.name),
                         name = c.name,
@@ -2850,6 +2865,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if u.name and u.name ~= "" then
                 local existing = findEntity(self.characters, u.name, u.aliases)
                 if existing then
+                    updated_chars = updated_chars + 1
                     promotePriorEntity(existing)
                     mergeAliases(existing, u.aliases)
                     existing.states = existing.states or {}
@@ -2882,6 +2898,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     if u.status and u.status ~= "" then existing.status = u.status end
                     updateEntityDescPreservingPrior(existing, u.description)
                 else
+                    new_chars = new_chars + 1
                     table.insert(self.characters, {
                         id = u.id or makeId("char", u.name),
                         name = u.name,
@@ -2920,6 +2937,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if l.name and l.name ~= "" then
                 local existing = findEntity(self.locations, l.name)
                 if existing then
+                    updated_locs = updated_locs + 1
                     promotePriorEntity(existing)
                     existing.states = existing.states or {}
                     table.insert(existing.states, {
@@ -2932,6 +2950,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     })
                     updateEntityDescPreservingPrior(existing, l.description)
                 else
+                    new_locs = new_locs + 1
                     table.insert(self.locations, {
                         id = l.id or makeId("loc", l.name),
                         name = l.name,
@@ -2962,6 +2981,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if u.name and u.name ~= "" then
                 local existing = findEntity(self.locations, u.name)
                 if existing then
+                    updated_locs = updated_locs + 1
                     promotePriorEntity(existing)
                     existing.states = existing.states or {}
                     table.insert(existing.states, {
@@ -2975,6 +2995,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     })
                     updateEntityDescPreservingPrior(existing, u.description)
                 else
+                    new_locs = new_locs + 1
                     table.insert(self.locations, {
                         id = u.id or makeId("loc", u.name),
                         name = u.name,
@@ -3008,6 +3029,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if t.name and t.name ~= "" then
                 local existing = findEntity(self.terms, t.name)
                 if existing then
+                    updated_terms = updated_terms + 1
                     promotePriorEntity(existing)
                     existing.states = existing.states or {}
                     local desc = t.description or t.definition or existing.description or existing.definition
@@ -3021,6 +3043,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     })
                     updateEntityDescPreservingPrior(existing, desc, "definition")
                 else
+                    new_terms = new_terms + 1
                     table.insert(self.terms, {
                         id = t.id or makeId("term", t.name),
                         name = t.name,
@@ -3052,6 +3075,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             if u.name and u.name ~= "" then
                 local existing = findEntity(self.terms, u.name)
                 if existing then
+                    updated_terms = updated_terms + 1
                     promotePriorEntity(existing)
                     existing.states = existing.states or {}
                     local desc = u.description or u.definition or existing.description or existing.definition
@@ -3066,6 +3090,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
                     })
                     updateEntityDescPreservingPrior(existing, desc, "definition")
                 else
+                    new_terms = new_terms + 1
                     local desc = u.description or u.definition or ""
                     table.insert(self.terms, {
                         id = u.id or makeId("term", u.name),
@@ -3106,6 +3131,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             end
         end
         if not already_has_ev then
+            new_events = new_events + 1
             table.insert(self.timeline, {
                 chapter = ev_title,
                 event = delta_data.timeline_event.event,
@@ -3114,6 +3140,9 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             })
         end
     end
+
+    self:log(string.format("XRayPlugin: Merged delta for '%s' (Ch. %s) -> New: [%d chars, %d locs, %d terms], Updated states: [%d chars, %d locs, %d terms], Events: %d",
+        ch_title, tostring(chapter_idx), new_chars, new_locs, new_terms, updated_chars, updated_locs, updated_terms, new_events))
 
     -- Mark chapter as fetched
     self.chapters_fetched = self.chapters_fetched or {}
@@ -3172,13 +3201,60 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
         return
     end
 
+    -- Build parent chapter mapping to distinguish actual TOC chapters from virtual segments
+    local parent_chapter_map = {}
+    local parent_order = {}
+    for _, ch in ipairs(queue) do
+        local pid = ch.parent_toc_index or ch.toc_index or ch.title
+        if not parent_chapter_map[pid] then
+            parent_chapter_map[pid] = {
+                title = ch.parent_title or ch.title,
+                total_parts = ch.total_parts or 1,
+                parts_completed = 0,
+                done = false,
+            }
+            table.insert(parent_order, pid)
+        elseif ch.total_parts and ch.total_parts > parent_chapter_map[pid].total_parts then
+            parent_chapter_map[pid].total_parts = ch.total_parts
+        end
+    end
+
+    local function markChapterItemComplete(item)
+        local pid = item.parent_toc_index or item.toc_index or item.title
+        local p_info = parent_chapter_map[pid]
+        if p_info then
+            p_info.parts_completed = p_info.parts_completed + 1
+            if not p_info.done and p_info.parts_completed >= p_info.total_parts then
+                p_info.done = true
+                self.active_sequential_completed_chapters = (self.active_sequential_completed_chapters or 0) + 1
+            end
+        end
+    end
+
     self.active_sequential_queue = queue
     self.active_sequential_is_manual = is_manual
     self.active_sequential_on_progress = on_progress
     self.active_sequential_on_done = on_done
     self.active_sequential_total = #queue
     self.active_sequential_completed = 0
+    self.active_sequential_total_chapters = #parent_order
+    self.active_sequential_completed_chapters = 0
     self.active_sequential_cancelled = false
+
+    local function notifyProgress()
+        if self.active_sequential_on_progress then
+            self.active_sequential_on_progress(
+                self.active_sequential_completed,
+                self.active_sequential_total,
+                self.active_sequential_completed_chapters,
+                self.active_sequential_total_chapters
+            )
+        end
+    end
+
+    local scan_mode = is_manual and "Manual full-book pre-generation" or "Horizon prefetch"
+    self:log(string.format("XRayPlugin: %s started - %d chapters (%d segments) queued.",
+        scan_mode, self.active_sequential_total_chapters, self.active_sequential_total))
 
     -- If a scan is already running, re-targeting the queue is sufficient;
     -- the running step will pick up from the new active_sequential_queue when finished.
@@ -3195,6 +3271,15 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
         local cb = self.active_sequential_on_done
         self.active_sequential_on_done = nil
         self.active_sequential_on_progress = nil
+        if success then
+            self:log(string.format("XRayPlugin: Sequential chapter scan complete! Processed %d of %d chapters (%d segments). Final cache: %d chars, %d locs, %d terms, %d events.",
+                self.active_sequential_completed_chapters or self.active_sequential_completed or 0,
+                self.active_sequential_total_chapters or self.active_sequential_total or 0,
+                self.active_sequential_completed or 0,
+                #(self.characters or {}), #(self.locations or {}), #(self.terms or {}), #(self.timeline or {})))
+        else
+            self:log("XRayPlugin: Sequential chapter scan halted or cancelled.")
+        end
         if cb then cb(success) end
         if success then
             pcall(function()
@@ -3242,11 +3327,11 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             local cand_id = (candidate.title or ("Chapter " .. tostring(cand_idx))) .. "_" .. tostring(candidate.page)
 
             if self.chapters_fetched[cand_id] then
+                self:log(string.format("XRayPlugin: Skipping already-fetched chapter '%s' (p. %s).", tostring(candidate.title), tostring(candidate.page)))
                 table.remove(q, 1)
                 self.active_sequential_completed = self.active_sequential_completed + 1
-                if self.active_sequential_on_progress then
-                    self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
-                end
+                markChapterItemComplete(candidate)
+                notifyProgress()
             else
                 -- Find next chapter in TOC for bounding candidate
                 local next_chapter = nil
@@ -3260,13 +3345,12 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
 
                 local ch_text = ChapterAnalyzer:getSingleChapterText(self.ui, candidate, next_chapter, nil, 50000)
                 if not ch_text or #ch_text < 100 then
-                    self:log("XRayPlugin: Chapter text empty or too short, skipping: " .. tostring(candidate.title))
+                    self:log("XRayPlugin: Chapter text empty or too short (<100 chars), skipping: " .. tostring(candidate.title))
                     table.remove(q, 1)
                     self.chapters_fetched[cand_id] = true
                     self.active_sequential_completed = self.active_sequential_completed + 1
-                    if self.active_sequential_on_progress then
-                        self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
-                    end
+                    markChapterItemComplete(candidate)
+                    notifyProgress()
                 else
                     if #batch_items > 0 and (total_batch_chars + #ch_text) > MAX_BATCH_CHARS then
                         -- Reached character budget for this batch, process current batch first
@@ -3275,6 +3359,11 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                     table.remove(q, 1)
                     local item_entry = {
                         title = candidate.title,
+                        parent_title = candidate.parent_title,
+                        parent_toc_index = candidate.parent_toc_index,
+                        part_index = candidate.part_index,
+                        total_parts = candidate.total_parts,
+                        is_virtual_segment = candidate.is_virtual_segment,
                         page = candidate.page,
                         end_page = candidate.end_page,
                         xpointer = candidate.xpointer,
@@ -3296,6 +3385,12 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                 finishScan(true)
             end
             return
+        end
+
+        self:log(string.format("XRayPlugin: Assembling batch (%d items, %d characters total)...", #batch_items, total_batch_chars))
+        for b_idx, bi in ipairs(batch_items) do
+            self:log(string.format("XRayPlugin:   [%d/%d] '%s' (p. %s-%s, %d chars)",
+                b_idx, #batch_items, bi.title, tostring(bi.page), tostring(bi.end_page or "?"), #(bi.text or "")))
         end
 
         local props = (self.ui and self.ui.document and self.ui.document.getProps and self.ui.document:getProps()) or {}
@@ -3324,6 +3419,9 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             return
         end
 
+        local prompt_chars = #prompt
+        local manifest_count = (self.characters and #self.characters or 0) + (self.locations and #self.locations or 0) + (self.terms and #self.terms or 0)
+
         local req_params, req_err = self.ai_helper:buildComprehensiveRequest(nil, nil, nil, prompt)
         if not req_params then
             self:log("XRayPlugin: Failed to build comprehensive request: " .. tostring(req_err))
@@ -3349,7 +3447,11 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             return
         end
 
+        self:log(string.format("XRayPlugin: Prompt generated (%d chars, manifest: %d entities). Dispatched async AI request (PID %s)...",
+            prompt_chars, manifest_count, tostring(pid)))
+
         local start_t = os.time()
+        local last_logged_elapsed = 0
         local timeout = 300
         local function pollResult()
             if self.destroyed or self.active_sequential_cancelled then
@@ -3359,7 +3461,12 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
             end
             local data, p_err = self.ai_helper:checkAsyncResult(result_file, pid)
             if data == nil then
-                if os.time() - start_t < timeout then
+                local elapsed = os.time() - start_t
+                if elapsed > 0 and (elapsed % 15 == 0) and elapsed ~= last_logged_elapsed then
+                    last_logged_elapsed = elapsed
+                    self:log(string.format("XRayPlugin: Waiting for AI response... (%ds elapsed)", elapsed))
+                end
+                if elapsed < timeout then
                     UIManager:scheduleIn(2, pollResult)
                 else
                     pcall(function() os.remove(result_file) end)
@@ -3368,7 +3475,9 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                 end
             else
                 pcall(function() os.remove(result_file) end)
+                local duration = math.max(0, os.time() - start_t)
                 if type(data) == "table" then
+                    self:log(string.format("XRayPlugin: AI response received in %ds. Merging delta data...", duration))
                     self.active_sequential_status = "Merging delta results..."
                     if data.chapters and type(data.chapters) == "table" then
                         -- Multi-chapter response
@@ -3406,11 +3515,16 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                     for _, bi in ipairs(batch_items) do
                         self.chapters_fetched[bi.unique_id] = true
                         self.active_sequential_completed = self.active_sequential_completed + 1
+                        markChapterItemComplete(bi)
                     end
                     self.active_sequential_status = "Batch completed. Pacing..."
-                    if self.active_sequential_on_progress then
-                        self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
-                    end
+                    notifyProgress()
+
+                    self:log(string.format("XRayPlugin: Batch completed (%d/%d chapters, %d/%d segments). Pacing cooldown: waiting 3s before next batch...",
+                        self.active_sequential_completed_chapters or self.active_sequential_completed,
+                        self.active_sequential_total_chapters or self.active_sequential_total,
+                        self.active_sequential_completed,
+                        self.active_sequential_total))
 
                     -- 3s pacing cooldown between batches to prevent rate limits (HTTP 429)
                     UIManager:scheduleIn(3, processNext)
@@ -3430,10 +3544,9 @@ function M:queueSequentialChapterScan(target_chapter_indices, is_manual, on_prog
                         for _, bi in ipairs(batch_items) do
                             self.chapters_fetched[bi.unique_id] = true
                             self.active_sequential_completed = self.active_sequential_completed + 1
+                            markChapterItemComplete(bi)
                         end
-                        if self.active_sequential_on_progress then
-                            self.active_sequential_on_progress(self.active_sequential_completed, self.active_sequential_total)
-                        end
+                        notifyProgress()
                         UIManager:scheduleIn(3, processNext)
                     end
                 end

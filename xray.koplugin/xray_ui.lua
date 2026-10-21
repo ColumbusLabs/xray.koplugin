@@ -1394,7 +1394,7 @@ function M:checkBookLanguageMatch()
     local ButtonDialog = require("ui/widget/buttondialog")
     local mismatch_dialog
     mismatch_dialog = ButtonDialog:new{
-        title = self.loc:t("lang_mismatch_title") or "Language Mismatch",
+        title = (self.loc:t("lang_mismatch_title") or "Language Mismatch") .. "\n\n" .. msg,
         text = msg,
         buttons = {
             {
@@ -3099,15 +3099,21 @@ function M:startFullBookPreGeneration()
         return
     end
 
-    if self.is_sequential_scan_active then
-        local done = self.active_sequential_completed or 0
-        local total = self.active_sequential_total or 0
-        local batch = self.active_sequential_current_batch
+    if self.is_sequential_scan_active or (self.isSequentialChapterScanActive and self:isSequentialChapterScanActive()) then
+        local done_ch = self.active_sequential_completed_chapters or self.active_sequential_completed or 0
+        local total_ch = self.active_sequential_total_chapters or self.active_sequential_total or 0
+        local done_seg = self.active_sequential_completed or 0
+        local total_seg = self.active_sequential_total or 0
+        local batch = self.active_sequential_current_batch or self.active_sequential_batch
         local batch_text = "Preparing next batch..."
         if batch and #batch > 0 then
             local titles = {}
             for _, b in ipairs(batch) do
-                table.insert(titles, string.format("Ch. %d: %s", b.toc_index or 1, b.title or "Untitled"))
+                local title_str = b.title or "Untitled"
+                if b.parent_title and b.is_virtual_segment and b.part_index and b.total_parts then
+                    title_str = string.format("%s (Part %d/%d)", b.parent_title, b.part_index, b.total_parts)
+                end
+                table.insert(titles, string.format("Ch. %d: %s", b.parent_toc_index or b.toc_index or 1, title_str))
             end
             batch_text = table.concat(titles, "\n  • ")
         end
@@ -3117,17 +3123,24 @@ function M:startFullBookPreGeneration()
         end
         local status_msg = self.active_sequential_status or "Working..."
         local ButtonDialog = require("ui/widget/buttondialog")
+        local progress_line
+        if total_seg > total_ch then
+            progress_line = string.format("• Progress: Chapter %d of %d (%d of %d segments processed)", done_ch, total_ch, done_seg, total_seg)
+        else
+            progress_line = string.format("• Progress: %d of %d chapters processed", done_ch, total_ch)
+        end
         local status_text = string.format(
             "Pre-generation is currently running in the background.\n\n" ..
-            "• Progress: %d of %d chapters processed\n" ..
+            "%s\n" ..
             "• Current Batch:\n  • %s\n" ..
             "• Status: %s (%ds elapsed)\n",
-            done, total, batch_text, status_msg, elapsed
+            progress_line, batch_text, status_msg, elapsed
         )
+        local dlg_title = self.loc and self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book"
         local status_dlg
         status_dlg = ButtonDialog:new{
             modal = true,
-            title = self.loc and self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book",
+            title = dlg_title .. "\n\n" .. status_text,
             text = status_text,
             buttons = {
                 {
@@ -3186,11 +3199,12 @@ function M:startFullBookPreGeneration()
             table.insert(narrative_chapters, ch)
         end
     end
+    local raw_chapter_count = #narrative_chapters
 
     local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
     local total_pages = self.ui and self.ui.document and self.ui.document.getPageCount and self.ui.document:getPageCount() or 0
     if ChapterAnalyzer and ChapterAnalyzer.expandOversizedTocChapters then
-        narrative_chapters = ChapterAnalyzer:expandOversizedTocChapters(narrative_chapters, total_pages, 25)
+        narrative_chapters = ChapterAnalyzer:expandOversizedTocChapters(narrative_chapters, total_pages, 60)
     end
 
     if #narrative_chapters == 0 then
@@ -3200,11 +3214,20 @@ function M:startFullBookPreGeneration()
 
     local ButtonDialog = require("ui/widget/buttondialog")
     local confirm_dlg
-    local prompt_text = (self.loc and self.loc:t("pregenerate_confirm_text") or "This will sequentially scan and analyze all %d chapters in the background. Newly discovered character states, locations, and glossary terms will remain spoiler-free until you reach them.\n\nContinue?"):format(#narrative_chapters)
+    local prompt_text
+    if #narrative_chapters > raw_chapter_count then
+        prompt_text = string.format(
+            "This will sequentially scan and analyze all %d chapters (%d segments) in the background. Newly discovered character states, locations, and glossary terms will remain spoiler-free until you reach them.\n\nContinue?",
+            raw_chapter_count, #narrative_chapters
+        )
+    else
+        prompt_text = (self.loc and self.loc:t("pregenerate_confirm_text") or "This will sequentially scan and analyze all %d chapters in the background. Newly discovered character states, locations, and glossary terms will remain spoiler-free until you reach them.\n\nContinue?"):format(raw_chapter_count)
+    end
 
+    local dlg_title = self.loc and self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book"
     confirm_dlg = ButtonDialog:new{
         modal = true,
-        title = self.loc and self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book",
+        title = dlg_title .. "\n\n" .. prompt_text,
         text = prompt_text,
         buttons = {
             {
@@ -3218,12 +3241,8 @@ function M:startFullBookPreGeneration()
                     callback = function()
                         UIManager:close(confirm_dlg)
                         UIManager:show(InfoMessage:new{ text = self.loc and self.loc:t("pregeneration_started") or "Pre-generation started in background.", timeout = 3 })
-                        self:queueSequentialChapterScan(narrative_chapters, true, function(done, total)
-                            self:log(string.format("XRayPlugin: Pre-generation progress: %d of %d chapters.", done, total))
-                            UIManager:show(InfoMessage:new{
-                                text = (self.loc and self.loc:t("pregeneration_progress") or "Pre-generating X-Ray: Chapter %d of %d..."):format(done, total),
-                                timeout = 2
-                            })
+                        self:queueSequentialChapterScan(narrative_chapters, true, function(done, total, done_ch, total_ch)
+                            self:log(string.format("XRayPlugin: Pre-generation progress: %d of %d chapters (%d of %d segments).", done_ch or done, total_ch or total, done, total))
                         end, function(success)
                             if success then
                                 UIManager:show(InfoMessage:new{ text = self.loc and self.loc:t("pregeneration_complete") or "Pre-generation complete!", timeout = 4 })
@@ -3494,10 +3513,12 @@ end
 function M:confirmAndRebuildXRay()
     local ButtonDialog = require("ui/widget/buttondialog")
     local dialog
+    local dlg_title = self.loc:t("rebuild_confirm_title") or "Rebuild X-Ray Data"
+    local dlg_text = self.loc:t("rebuild_confirm_text")
+        or "This will discard all cached X-Ray data for this book and fetch fresh data from AI.\n\nContinue?"
     dialog = ButtonDialog:new{
-        title = self.loc:t("rebuild_confirm_title") or "Rebuild X-Ray Data",
-        text  = self.loc:t("rebuild_confirm_text")
-            or "This will discard all cached X-Ray data for this book and fetch fresh data from AI.\n\nContinue?",
+        title = dlg_title .. "\n\n" .. dlg_text,
+        text  = dlg_text,
         buttons = {{
             {
                 text = self.loc:t("cancel") or "Cancel",

@@ -3491,6 +3491,69 @@ describe("xray_ui", function()
             assert.are.equal(0, #plugin.characters)
             assert.is_true(fetch_called)
         end)
+
+        it("confirmAndRebuildXRay includes prompt body text in ButtonDialog title", function()
+            plugin:confirmAndRebuildXRay()
+            local last = _G.ui_tracker.last_shown
+            assert.is_not_nil(last)
+            assert.truthy(last.title:find("rebuild_confirm_title"))
+            assert.truthy(last.title:find("rebuild_confirm_text"))
+        end)
+
+        it("startFullBookPreGeneration shows status dialog with full progress details in title when scan is active", function()
+            plugin.isSequentialChapterScanActive = function() return true end
+            plugin.is_sequential_scan_active = true
+            plugin.active_sequential_completed_chapters = 3
+            plugin.active_sequential_total_chapters = 26
+            plugin.active_sequential_completed = 5
+            plugin.active_sequential_total = 30
+            plugin.active_sequential_batch = { { title = "Sol 6", parent_title = "Chapter 6", is_virtual_segment = true, part_index = 1, total_parts = 2, parent_toc_index = 6 } }
+            plugin.active_sequential_status = "Waiting for AI response..."
+            plugin.active_sequential_batch_start_time = os.time() - 15
+
+            plugin:startFullBookPreGeneration()
+
+            local last = _G.ui_tracker.last_shown
+            assert.is_not_nil(last)
+            assert.are.equal("ButtonDialog", last.type)
+            assert.truthy(last.title:find("menu_pregenerate_book"))
+            assert.truthy(last.title:find("Chapter 3 of 26"))
+            assert.truthy(last.title:find("5 of 30 segments"))
+            assert.truthy(last.title:find("Ch. 6: Chapter 6 (Part 1/2)", 1, true))
+            assert.truthy(last.title:find("Waiting for AI response..."))
+            assert.truthy(last.title:find("elapsed"))
+
+            -- Check buttons: Stop, Refresh, Close
+            assert.are.equal(1, #last.buttons)
+            assert.are.equal(3, #last.buttons[1])
+            assert.are.equal("stop_pregeneration", last.buttons[1][1].text)
+            assert.are.equal("refresh", last.buttons[1][2].text)
+            assert.are.equal("continue_in_background", last.buttons[1][3].text)
+        end)
+
+        it("startFullBookPreGeneration shows confirmation dialog with prompt text in title when idle", function()
+            plugin.isSequentialChapterScanActive = function() return false end
+            plugin.is_sequential_scan_active = false
+            plugin.ui = {
+                document = {
+                    getToc = function()
+                        return {
+                            { title = "Chapter 1", page = 1 },
+                            { title = "Chapter 2", page = 10 },
+                        }
+                    end,
+                    getPageCount = function() return 20 end,
+                }
+            }
+
+            plugin:startFullBookPreGeneration()
+
+            local last = _G.ui_tracker.last_shown
+            assert.is_not_nil(last)
+            assert.are.equal("ButtonDialog", last.type)
+            assert.truthy(last.title:find("menu_pregenerate_book"))
+            assert.truthy(last.title:find("pregenerate_confirm_text"))
+        end)
     end)
     describe("showSeriesContextPrompt", function()
         local loc_xray = require("localization_xray")

@@ -745,17 +745,19 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui, max_page)
     return #annotations_text > 0 and annotations_text or nil
 end
 
--- Subdivide oversized TOC entries (e.g. books with only "Parts" like Carrie, or chapters > 25 pages)
+-- Subdivide oversized TOC entries (e.g. books with only "Parts" like Carrie, or chapters > 60 pages)
 -- into granular virtual segments for sequential Story Arc prefetching.
 function ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, max_pages_per_segment)
     if not toc or #toc == 0 then return {} end
-    max_pages_per_segment = max_pages_per_segment or 25
+    max_pages_per_segment = max_pages_per_segment or 60
     total_pages = total_pages or 0
 
     local expanded = {}
     local global_toc_index = 1
 
     for i, ch in ipairs(toc) do
+        local parent_idx = ch.parent_toc_index or ch.toc_index or i
+        local parent_name = ch.parent_title or ch.title or ("Chapter " .. tostring(parent_idx))
         local next_page = nil
         for j = i + 1, #toc do
             if toc[j] and toc[j].page and toc[j].page > (ch.page or 0) then
@@ -776,7 +778,10 @@ function ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, max_pages_
                 local seg_end = math.min(next_page - 1, seg_start + pages_per_part - 1)
                 local sub_ch = {
                     title = string.format("%s (%d/%d)", ch.title or "Chapter", part, num_parts),
-                    parent_title = ch.title,
+                    parent_title = parent_name,
+                    parent_toc_index = parent_idx,
+                    part_index = part,
+                    total_parts = num_parts,
                     page = seg_start,
                     end_page = seg_end,
                     toc_index = global_toc_index,
@@ -790,6 +795,10 @@ function ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, max_pages_
         else
             local cloned = {
                 title = ch.title,
+                parent_title = parent_name,
+                parent_toc_index = parent_idx,
+                part_index = 1,
+                total_parts = 1,
                 page = ch.page,
                 end_page = next_page and (next_page - 1) or nil,
                 toc_index = global_toc_index,

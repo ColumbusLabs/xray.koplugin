@@ -795,7 +795,7 @@ function XRayPlugin:checkPrefetchHorizon()
 
     local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
     local total_pages = self.ui and self.ui.document and self.ui.document.getPageCount and self.ui.document:getPageCount() or 0
-    local expanded_toc = (ChapterAnalyzer and ChapterAnalyzer.expandOversizedTocChapters) and ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, 25) or toc
+    local expanded_toc = (ChapterAnalyzer and ChapterAnalyzer.expandOversizedTocChapters) and ChapterAnalyzer:expandOversizedTocChapters(toc, total_pages, 60) or toc
 
     local cur_chap_idx = 1
     for i, ch in ipairs(expanded_toc) do
@@ -820,8 +820,11 @@ function XRayPlugin:checkPrefetchHorizon()
         end
     end
 
+    local cur_chap_name = expanded_toc[cur_chap_idx] and (expanded_toc[cur_chap_idx].parent_title or expanded_toc[cur_chap_idx].title) or "Unknown"
+    self:log(string.format("XRayPlugin: Horizon check - Current page: %d (Chap %d: '%s'), Horizon: +%d chapters, Queued: %d upcoming chapters.",
+        cur_page, cur_chap_idx, tostring(cur_chap_name), horizon, #target_chapters))
+
     if #target_chapters > 0 then
-        self:log("XRayPlugin: Horizon prefetch detected " .. tostring(#target_chapters) .. " upcoming chapters to prefetch.")
         self:queueSequentialChapterScan(target_chapters, false)
     end
 end
@@ -1502,8 +1505,20 @@ function XRayPlugin:getSubMenuItems()
         separator = true,
     })
 
+    local function getPregenerateMenuText()
+        if self.is_sequential_scan_active then
+            local done = self.active_sequential_completed_chapters or self.active_sequential_completed or 0
+            local total = self.active_sequential_total_chapters or self.active_sequential_total or 0
+            local fmt = (self.loc and self.loc:t("pregeneration_progress")) or "Pre-generating X-Ray: Chapter %d of %d..."
+            return fmt:format(done, total)
+        else
+            return self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book…"
+        end
+    end
+
     table.insert(items, {
-        text = self.loc:t("menu_pregenerate_book") or "Pre-generate Entire Book…",
+        text = getPregenerateMenuText(),
+        text_func = getPregenerateMenuText,
         keep_menu_open = true,
         callback = function()
             self:startFullBookPreGeneration()
@@ -2135,66 +2150,118 @@ function XRayPlugin:showUnitStyleCard()
             alignment = "center",
         }
         local sample_size = sample_text:getSize()
-        local sample_w = (sample_size and sample_size.w or 200) + sc(20)
-        local sample_h = sample_size and sample_size.h or 30
+        local underline_color_val
+        if underline_intensity == "light" then
+            underline_color_val = Blitbuffer.Color8(200)
+        elseif underline_intensity == "dark" then
+            underline_color_val = Blitbuffer.Color8(30)
+        else
+            underline_color_val = Blitbuffer.Color8(120)
+        end
 
-        local preview_line = UnderlinePreview:new{
-            width = sample_w,
-            height = sample_h + sc(12),
+        local w_walked = 50
+        local w_miles = 50
+        if RenderText and RenderText.sizeUtf8Text then
+            local s_walked = RenderText:sizeUtf8Text(0, 9999, preview_face, "walked ", false, false)
+            if s_walked and s_walked.x then w_walked = s_walked.x end
+            local s_miles = RenderText:sizeUtf8Text(0, 9999, preview_face, "2 miles", false, false)
+            if s_miles and s_miles.x then w_miles = s_miles.x end
+        end
+
+        local underline_widget = UnderlinePreview:new{
+            width = w_miles,
+            height = sample_size.h,
             underline_style = underline_style,
             underline_thickness = underline_thickness,
+            underline_color_val = underline_color_val,
+            overlap_offset = { w_walked, 0 },
             plugin = self,
         }
 
-        local popup_bubble = FrameContainer:new{
-            padding = sc(4),
-            padding_h = sc(12),
-            bordersize = sc(1),
-            color = Blitbuffer.COLOR_BLACK,
+        local preview_example = OverlapGroup:new{
+            dimen = sample_size,
+            sample_text,
+            underline_widget,
+        }
+
+        local tooltip_text = "3.22 km"
+        local tooltip_face = Font:getFace("cfont", fs)
+        local pad_h = 28
+        local pad_v = math.floor(fs * 0.55)
+        local text_size = RenderText and RenderText.sizeUtf8Text and RenderText:sizeUtf8Text(0, 9999, tooltip_face, tooltip_text, false, false)
+        local text_w = text_size and text_size.x or 70
+        local tooltip_max_w = dialog_w - sc(64)
+        local popup_w = math.min(tooltip_max_w, text_w + pad_h * 2)
+
+        local tb = TextWidget:new{
+            text = tooltip_text,
+            face = tooltip_face,
+        }
+
+        local border_sz = sc(2)
+        local preview_tooltip = FrameContainer:new{
             background = Blitbuffer.COLOR_WHITE,
-            radius = sc(2),
-            TextWidget:new{
-                text = "3.22 km",
-                face = Font:getFace("cfont", ui_font_size),
-                alignment = "center",
+            bordersize = border_sz,
+            color = Blitbuffer.COLOR_DARK_GRAY,
+            radius = 0,
+            padding_top = pad_v,
+            padding_bottom = pad_v,
+            padding_left = pad_h,
+            padding_right = pad_h,
+            width = popup_w,
+            VerticalGroup:new{
+                align = "center",
+                tb
             }
         }
 
-        local arrow_widget = self._PointerArrow and self._PointerArrow:new{
-            point_down = true,
-            width = sc(12),
-            height = sc(6),
-            color = Blitbuffer.COLOR_BLACK,
-        }
+        local card_size = preview_tooltip:getSize()
+        local card_h = card_size.h
 
-        local preview_bubble_vg = VerticalGroup:new{
-            align = "center",
-            popup_bubble,
+        local arrow_w = sc(16)
+        local arrow_h = sc(8)
+        local _PointerArrow = self._PointerArrow or (require(plugin_path .. "xray_unitscanner")._PointerArrow)
+        local preview_arrow = _PointerArrow and _PointerArrow:new{
+            width = arrow_w,
+            height = arrow_h,
+            direction = "down",
+            apex_offset = arrow_w / 2,
+            border_size = border_sz,
+            border_color = Blitbuffer.COLOR_DARK_GRAY,
+            fill_color = Blitbuffer.COLOR_WHITE,
         }
-        if arrow_widget then
-            table.insert(preview_bubble_vg, arrow_widget)
+        if preview_arrow then
+            preview_arrow.overlap_offset = { math.floor((popup_w - arrow_w) / 2), card_h - border_sz }
         end
 
-        local preview_content = VerticalGroup:new{
-            align = "center",
-            preview_bubble_vg,
-            VerticalSpan:new{ width = sc(2) },
-            sample_text,
-            VerticalSpan:new{ width = sc(1) },
-            preview_line,
-        }
+        local tooltip_with_arrow
+        if preview_arrow then
+            tooltip_with_arrow = OverlapGroup:new{
+                dimen = Geom:new{ w = popup_w, h = card_h + arrow_h - border_sz },
+                preview_tooltip,
+                preview_arrow,
+            }
+        else
+            tooltip_with_arrow = preview_tooltip
+        end
 
-        local preview_panel = CenterContainer:new{
-            dimen = Geom:new{ w = dialog_w - sc(28), h = sc(85) },
-            FrameContainer:new{
-                bordersize = xray_theme.border_preview,
-                color = xray_theme.color_border,
-                padding = sc(8),
-                background = Blitbuffer.COLOR_WHITE,
-                width = dialog_w - sc(28),
+        local preview_panel = FrameContainer:new{
+            padding = sc(8),
+            radius = xray_theme.radius_window,
+            bordersize = xray_theme.border_preview,
+            color = xray_theme.color_border,
+            background = Blitbuffer.COLOR_WHITE,
+            width = dialog_w - sc(28),
+            VerticalGroup:new{
+                align = "center",
+                HorizontalGroup:new{
+                    align = "center",
+                    tooltip_with_arrow
+                },
+                VerticalSpan:new{ width = sc(2) },
                 CenterContainer:new{
-                    dimen = Geom:new{ w = dialog_w - sc(44), h = sc(72) },
-                    preview_content
+                    dimen = Geom:new{ w = dialog_w - sc(44), h = sample_size.h },
+                    preview_example
                 }
             }
         }

@@ -1005,6 +1005,42 @@ describe("xray_fetch", function()
             assert.are.equal("Chapter 1", expanded[1].title)
             assert.is_nil(expanded[1].is_virtual_segment)
         end)
+
+        it("does not split chapters between 25 and 60 pages with default threshold", function()
+            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            local raw_toc = {
+                { title = "Chapter 23", page = 585 },
+                { title = "Chapter 24", page = 610 }, -- 25 pages
+                { title = "Chapter 25", page = 636 }, -- 26 pages
+                { title = "Chapter 26", page = 668 }, -- 50 pages
+            }
+            local expanded = ChapterAnalyzer:expandOversizedTocChapters(raw_toc, 718)
+            assert.are.equal(4, #expanded)
+            assert.is_nil(expanded[1].is_virtual_segment)
+            assert.is_nil(expanded[2].is_virtual_segment)
+            assert.is_nil(expanded[3].is_virtual_segment)
+            assert.is_nil(expanded[4].is_virtual_segment)
+            assert.are.equal(1, expanded[1].parent_toc_index)
+            assert.are.equal(2, expanded[2].parent_toc_index)
+            assert.are.equal(3, expanded[3].parent_toc_index)
+            assert.are.equal(4, expanded[4].parent_toc_index)
+        end)
+
+        it("preserves parent_toc_index and part_index on virtual segments", function()
+            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            local raw_toc = {
+                { title = "Part One", page = 1 },
+                { title = "Part Two", page = 121 },
+            }
+            local expanded = ChapterAnalyzer:expandOversizedTocChapters(raw_toc, 200, 50)
+            assert.is_true(#expanded > 2)
+            assert.are.equal(1, expanded[1].parent_toc_index)
+            assert.are.equal(1, expanded[1].part_index)
+            assert.are.equal("Part One", expanded[1].parent_title)
+            assert.is_true(expanded[1].is_virtual_segment)
+            assert.are.equal(1, expanded[2].parent_toc_index)
+            assert.are.equal(2, expanded[2].part_index)
+        end)
     end)
 end)
 

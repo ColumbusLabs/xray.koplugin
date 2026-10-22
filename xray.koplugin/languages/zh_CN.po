@@ -541,6 +541,10 @@ msgstr "整本书模式"
 msgid "gemini_key_hint"
 msgstr "输入 Google AI Studio 免费获取的 Gemini 密钥（以 AQ. 或 AIzaSy... 开头）："
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "高亮菜单"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "提前 1 章"
@@ -2037,9 +2041,17 @@ msgstr "欢迎使用 X-RAY"
 msgid "xray_disabled_label"
 msgstr "已禁用"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "已启用"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "控制阅读时划词或选择文本与 X-Ray 的联动方式：\n\n• [B]菜单按钮：[/B]在 KOReader 词典和划词菜单中添加“X-Ray”按钮。\n• [B]划词即弹 X-Ray：[/B]当选择包含 X-Ray 数据的词语或角色名时，跳过划词菜单直接弹出 X-Ray 窗口。若无匹配数据，则显示常规菜单。可在弹窗内随时点击“高亮菜单”进行常规划线高亮或查词典。\n• [B]停用：[/B]隐藏文中选词的 X-Ray 按钮。"
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "划词即弹 X-Ray"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "菜单按钮 (默认)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

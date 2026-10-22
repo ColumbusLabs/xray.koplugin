@@ -559,6 +559,17 @@ function XRayBottomPopup:_buildContent()
         })
     end
 
+    -- D. Highlight Menu button (when opened via auto-popup)
+    if self.restore_menu_cb then
+        table.insert(raw_button_defs, {
+            label = get_loc_t("highlight_menu_btn", "Highlight Menu"),
+            cb = function()
+                UIManager:close(self)
+                self.restore_menu_cb()
+            end,
+        })
+    end
+
     if #raw_button_defs > 0 then
         if self.focused_btn_index > #raw_button_defs then self.focused_btn_index = #raw_button_defs end
         if self.focused_btn_index < 1 then self.focused_btn_index = 1 end
@@ -604,34 +615,33 @@ function XRayBottomPopup:_buildContent()
                 active_btns[2],
             }
         elseif total_btns_w > inner_w and #active_btns > 2 then
-            -- Multi-row wrap with uniform column widths for balanced grid
-            local half = math.ceil(#active_btns / 2)
+            -- Multi-row wrap with uniform column widths (2 columns per row)
             local col_w = math.floor((inner_w - span_w) / 2)
             for _, btn in ipairs(active_btns) do
                 btn.width = col_w
             end
 
-            local row1_btns = {}
-            for i = 1, half do table.insert(row1_btns, active_btns[i]) end
-            local row2_btns = {}
-            for i = half + 1, #active_btns do table.insert(row2_btns, active_btns[i]) end
+            local rows = {}
+            local current_row = nil
+            for i, btn in ipairs(active_btns) do
+                if (i % 2) == 1 then
+                    current_row = { align = "center" }
+                    table.insert(rows, current_row)
+                    table.insert(current_row, btn)
+                else
+                    table.insert(current_row, HorizontalSpan:new{ width = span_w })
+                    table.insert(current_row, btn)
+                end
+            end
 
-            local row1 = { align = "center" }
-            for i, btn in ipairs(row1_btns) do
-                if i > 1 then table.insert(row1, HorizontalSpan:new{ width = span_w }) end
-                table.insert(row1, btn)
+            local vg_rows = { align = "center" }
+            for r_idx, r in ipairs(rows) do
+                if r_idx > 1 then
+                    table.insert(vg_rows, VerticalSpan:new{ width = math.max(6, gap) })
+                end
+                table.insert(vg_rows, HorizontalGroup:new(r))
             end
-            local row2 = { align = "center" }
-            for i, btn in ipairs(row2_btns) do
-                if i > 1 then table.insert(row2, HorizontalSpan:new{ width = span_w }) end
-                table.insert(row2, btn)
-            end
-            btn_row = VerticalGroup:new{
-                align = "center",
-                HorizontalGroup:new(row1),
-                VerticalSpan:new{ width = math.max(6, gap) },
-                HorizontalGroup:new(row2),
-            }
+            btn_row = VerticalGroup:new(vg_rows)
         else
             local btn_components = { align = "center" }
             for i, btn in ipairs(active_btns) do
@@ -774,7 +784,7 @@ function XRayBottomPopup:onCloseWidget()
     UIManager:setDirty(nil, "ui")
 end
 
-local function showBottomPopup(plugin, entity)
+local function showBottomPopup(plugin, entity, opts)
     if not entity then return end
     if plugin.active_details_dialog then
         UIManager:close(plugin.active_details_dialog)
@@ -811,11 +821,12 @@ local function showBottomPopup(plugin, entity)
         pad = G_reader_settings:readSetting("xray_popup_margin") or pad
     end
     local popup = XRayBottomPopup:new{
-        modal       = true,
-        entity      = normalized,
-        plugin      = plugin,
-        font_size   = fs,
-        margin_size = pad,
+        modal           = true,
+        entity          = normalized,
+        plugin          = plugin,
+        font_size       = fs,
+        margin_size     = pad,
+        restore_menu_cb = opts and opts.restore_menu_cb,
     }
     plugin.active_details_dialog = popup
     UIManager:show(popup)
@@ -1740,7 +1751,7 @@ end
 
 function M:showCharacterDetails(character, opts)
     if shouldUseBottomPopup(self, opts) then
-        showBottomPopup(self, character)
+        showBottomPopup(self, character, opts)
         return
     end
     local metrics = self:calculatePopupFontMetrics(character)
@@ -1903,6 +1914,15 @@ function M:showCharacterDetails(character, opts)
             end,
         })
     end
+    if opts and opts.restore_menu_cb then
+        table.insert(action_btns, {
+            text = self.loc:t("highlight_menu_btn") or "Highlight Menu",
+            callback = function()
+                if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
+                opts.restore_menu_cb()
+            end,
+        })
+    end
 
     local close_btn = {
         text = self.loc:t("close") or "Close",
@@ -1953,7 +1973,7 @@ end
 
 function M:showLocationDetails(loc_item, opts)
     if shouldUseBottomPopup(self, opts) then
-        showBottomPopup(self, loc_item)
+        showBottomPopup(self, loc_item, opts)
         return
     end
     local metrics = self:calculatePopupFontMetrics(loc_item)
@@ -2047,6 +2067,15 @@ function M:showLocationDetails(loc_item, opts)
             end,
         })
     end
+    if opts and opts.restore_menu_cb then
+        table.insert(action_btns, {
+            text = self.loc:t("highlight_menu_btn") or "Highlight Menu",
+            callback = function()
+                if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
+                opts.restore_menu_cb()
+            end,
+        })
+    end
 
     local close_btn = {
         text = self.loc:t("close") or "Close",
@@ -2087,7 +2116,7 @@ end
 
 function M:showTermDetails(term, opts)
     if shouldUseBottomPopup(self, opts) then
-        showBottomPopup(self, term)
+        showBottomPopup(self, term, opts)
         return
     end
     local metrics = self:calculatePopupFontMetrics(term)
@@ -2243,6 +2272,15 @@ function M:showTermDetails(term, opts)
             callback = function()
                 if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
                 self:showMentionsForEntity(term)
+            end,
+        })
+    end
+    if opts and opts.restore_menu_cb then
+        table.insert(action_btns, {
+            text = self.loc:t("highlight_menu_btn") or "Highlight Menu",
+            callback = function()
+                if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
+                opts.restore_menu_cb()
             end,
         })
     end
@@ -4108,23 +4146,49 @@ function M:viewLog(page_num)
 end
 
 function M:toggleXRayMode()
-    local enabled_text = self.loc:t("xray_enabled_label") or "Enabled"
+    local button_text = self.loc:t("xray_mode_button_label") or "Button in Menu (Default)"
+    local auto_popup_text = self.loc:t("xray_mode_auto_popup_label") or "Auto-Popup on Highlight"
     local disabled_text = self.loc:t("xray_disabled_label") or "Disabled"
     XRaySettingsCard.show(self, {
         title = self.loc:t("menu_xray_mode") or "X-Ray Mode Settings",
         description = self.loc:t("xray_mode_desc"),
         options = {
-            { text = enabled_text, value = true },
-            { text = disabled_text, value = false },
+            { text = button_text, value = "button" },
+            { text = auto_popup_text, value = "auto_popup" },
+            { text = disabled_text, value = "disabled" },
         },
         get_current_func = function()
-            return self.xray_mode_enabled == true
+            if self.xray_mode_enabled == false then
+                return "disabled"
+            elseif self.xray_auto_popup == true then
+                return "auto_popup"
+            else
+                return "button"
+            end
         end,
         save_func = function(val)
-            self.xray_mode_enabled = val
-            if self.ai_helper then self.ai_helper:saveSettings({ xray_mode_enabled = val }) end
+            if val == "auto_popup" then
+                self.xray_mode_enabled = true
+                self.xray_auto_popup = true
+                if self.ai_helper then
+                    self.ai_helper:saveSettings({ xray_mode_enabled = true, xray_auto_popup = true })
+                end
+            elseif val == "button" or val == true then
+                self.xray_mode_enabled = true
+                self.xray_auto_popup = false
+                if self.ai_helper then
+                    self.ai_helper:saveSettings({ xray_mode_enabled = true, xray_auto_popup = false })
+                end
+            else
+                self.xray_mode_enabled = false
+                self.xray_auto_popup = false
+                if self.ai_helper then
+                    self.ai_helper:saveSettings({ xray_mode_enabled = false, xray_auto_popup = false })
+                end
+            end
             UIManager:setDirty(nil, "ui")
         end,
+        about_text = self.loc:t("xray_mode_about") or "Controls how X-Ray integrates with text selection while reading:\n\n• [B]Button in Menu:[/B] Adds an 'X-Ray' button to KOReader's dictionary and highlight menus.\n• [B]Auto-Popup on Highlight:[/B] Immediately opens X-Ray when you select a word or name that has X-Ray data, skipping the highlight menu. If no X-Ray data matches, the regular menu is shown. Use the 'Highlight Menu' button inside the popup anytime to highlight or look up the word in the dictionary.\n• [B]Disabled:[/B] Hides in-text X-Ray lookup buttons.",
     })
 end
 
@@ -4299,7 +4363,7 @@ end
 
 function M:showHistoricalFigureDetails(fig, opts)
     if shouldUseBottomPopup(self, opts) then
-        showBottomPopup(self, fig)
+        showBottomPopup(self, fig, opts)
         return
     end
     local metrics = self:calculatePopupFontMetrics(fig)
@@ -4390,6 +4454,15 @@ function M:showHistoricalFigureDetails(fig, opts)
             callback = function()
                 if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
                 self:showMentionsForEntity(fig)
+            end,
+        })
+    end
+    if opts and opts.restore_menu_cb then
+        table.insert(action_btns, {
+            text = self.loc:t("highlight_menu_btn") or "Highlight Menu",
+            callback = function()
+                if self.active_details_dialog then UIManager:close(self.active_details_dialog); self.active_details_dialog = nil end
+                opts.restore_menu_cb()
             end,
         })
     end

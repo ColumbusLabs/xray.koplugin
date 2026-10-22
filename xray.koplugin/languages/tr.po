@@ -541,6 +541,10 @@ msgstr "Tam Kitap Modu"
 msgid "gemini_key_hint"
 msgstr "Google AI Studio'dan ücretsiz Gemini anahtarınızı girin (AQ. veya AIzaSy... ile başlar):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Vurgulama Menüsü"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 Bölüm İleride"
@@ -2037,9 +2041,17 @@ msgstr "X-RAY'E HOŞ GELDİNİZ"
 msgid "xray_disabled_label"
 msgstr "Devre Dışı"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Etkin"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Okuma sırasında X-Ray'in metin seçimiyle nasıl entegre olacağını kontrol eder:\n\n• [B]Menüde Düğme:[/B] KOReader'ın sözlük ve vurgulama menülerine bir 'X-Ray' düğmesi ekler.\n• [B]Vurgulamada Otomatik Açılır Pencere:[/B] X-Ray verisi olan bir kelime veya isim seçtiğinizde vurgulama menüsünü atlayarak hemen X-Ray penceresini açar. Eşleşen veri yoksa normal menü gösterilir. Sözlükte aramak veya vurgulamak için pencere içindeki 'Vurgulama Menüsü' düğmesini dilediğiniz zaman kullanabilirsiniz.\n• [B]Devre Dışı:[/B] Metin içi X-Ray arama düğmelerini gizler."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Vurgulamada Otomatik Açılır Pencere"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Menüde Düğme (Varsayılan)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

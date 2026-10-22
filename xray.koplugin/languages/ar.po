@@ -541,6 +541,10 @@ msgstr "وضع الكتاب الكامل"
 msgid "gemini_key_hint"
 msgstr "أدخل مفتاح Gemini المجاني من Google AI Studio (يبدأ بـ AQ. أو AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "قائمة التظليل"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "فصل واحد للأمام"
@@ -2037,9 +2041,17 @@ msgstr "مرحبًا بك في X-RAY"
 msgid "xray_disabled_label"
 msgstr "معطل"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "ممكن"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "يتحكم في كيفية دمج X-Ray مع اختيار النص أثناء القراءة:\n\n• [B]زر في القائمة:[/B] يضيف زر 'X-Ray' إلى قواميس KOReader وقوائم التظليل.\n• [B]نافذة منبثقة تلقائية عند التظليل:[/B] يفتح X-Ray فوراً عند تحديد كلمة أو اسم يحتوي على بيانات X-Ray، متخطياً قائمة التظليل. إذا لم تتوفر بيانات X-Ray، تظهر القائمة العادية. استخدم زر 'قائمة التظليل' داخل النافذة المنبثقة في أي وقت لتظليل الكلمة أو البحث عنها في القاموس.\n• [B]معطل:[/B] يخفي أزرار البحث الخاصة بـ X-Ray داخل النص."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "نافذة منبثقة تلقائية عند التظليل"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "زر في القائمة (افتراضي)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

@@ -541,6 +541,10 @@ msgstr "Режим целе књиге"
 msgid "gemini_key_hint"
 msgstr "Унесите свој бесплатни Gemini кључ из Google AI Studio (почиње са AQ. или AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Мени истицања"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 poglavlje unapred"
@@ -2037,9 +2041,17 @@ msgstr "ДОБРО ДОШЛИ У X-RAY"
 msgid "xray_disabled_label"
 msgstr "Онемогућено"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Омогућено"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Контролише интеграцију X-Ray функције са избором текста током читања:\n\n• [B]Дугме у менију:[/B] Додаје дугме „X-Ray“ у речник и мени истицања KOReader-а.\n• [B]Аутоматски искачући прозор при истицању:[/B] Одмах отвара X-Ray када изаберете реч или име које има X-Ray податке, прескачући мени истицања. Ако подаци не постоје, приказује се обичан мени. Дугме „Мени истицања“ у прозору можете користити за претрагу речника или истицање.\n• [B]Онемогућено:[/B] Скрива дугмад за X-Ray у тексту."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Аутоматски искачући прозор при истицању"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Дугме у менију (подразумевано)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

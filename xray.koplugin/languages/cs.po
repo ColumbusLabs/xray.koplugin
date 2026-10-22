@@ -541,6 +541,10 @@ msgstr "Režim celé knihy"
 msgid "gemini_key_hint"
 msgstr "Zadejte svůj bezplatný klíč Gemini z Google AI Studio (začíná AQ. nebo AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Nabídka zvýraznění"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 kapitola napřed"
@@ -2037,9 +2041,17 @@ msgstr "VÍTEJTE V X-RAY"
 msgid "xray_disabled_label"
 msgstr "Vypnuto"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Zapnuto"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Určuje, jak se X-Ray integruje s výběrem textu při čtení:\n\n• [B]Tlačítko v nabídce:[/B] Přidá tlačítko 'X-Ray' do nabídek slovníku a zvýraznění v KOReaderu.\n• [B]Automaticky při zvýraznění:[/B] Okamžitě otevře X-Ray při výběru slova nebo jména s daty X-Ray a přeskočí nabídku zvýraznění. Pokud data X-Ray neexistují, zobrazí se běžná nabídka. V pop-up okně můžete kdykoliv použít tlačítko 'Nabídka zvýraznění' pro zvýraznění nebo vyhledání slova ve slovníku.\n• [B]Zakázáno:[/B] Skryje tlačítka X-Ray v textu."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Automaticky při zvýraznění"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Tlačítko v nabídce (výchozí)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

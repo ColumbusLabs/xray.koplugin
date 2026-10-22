@@ -541,6 +541,10 @@ msgstr "Режим усієї книги"
 msgid "gemini_key_hint"
 msgstr "Введіть безкоштовний ключ Gemini з Google AI Studio (починається з AQ. або AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Меню виділення"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 розділ вперед"
@@ -2037,9 +2041,17 @@ msgstr "ЛАСКАВО ПРОСИМО ДО X-RAY"
 msgid "xray_disabled_label"
 msgstr "Вимкнено"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Увімкнено"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Керує інтеграцією X-Ray із виділенням тексту під час читання:\n\n• [B]Кнопка в меню:[/B] додає кнопку «X-Ray» до словника та меню виділення KOReader.\n• [B]Авто-виринання при виділенні:[/B] миттєво відкриває X-Ray при виборі слова або імені з даними X-Ray, оминаючи меню виділення. Якщо даних немає, відкривається звичайне меню. Використовуйте кнопку «Меню виділення» у вікні для переходу до виділення або словника.\n• [B]Вимкнено:[/B] приховує кнопки пошуку X-Ray у тексті."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Авто-виринання при виділенні"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Кнопка в меню (типово)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

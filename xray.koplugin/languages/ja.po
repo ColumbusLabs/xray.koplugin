@@ -541,6 +541,10 @@ msgstr "全編モード"
 msgid "gemini_key_hint"
 msgstr "Google AI Studioの無料Geminiキーを入力 (AQ. または AIzaSy... で始まります):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "ハイライトメニュー"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1章先まで"
@@ -2037,9 +2041,17 @@ msgstr "X-RAYへようこそ"
 msgid "xray_disabled_label"
 msgstr "無効"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "有効"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "読書中のテキスト選択とX-Rayの統合方法を設定します:\n\n• [B]メニュー内にボタンを表示:[/B] KOReaderの辞書・ハイライトメニューに 'X-Ray' ボタンを追加します。\n• [B]ハイライト時に自動ポップアップ:[/B] X-Rayデータがある単語や名前を選択すると、ハイライトメニューをスキップして即座にX-Rayを開きます。データがない場合は通常のメニューが表示されます。ポップアップ内の 'ハイライトメニュー' ボタンから、いつでもハイライトや辞書検索が可能です。\n• [B]無効:[/B] テキスト内のX-Ray検索ボタンを非表示にします。"
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "ハイライト時に自動ポップアップ"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "メニュー内にボタンを表示 (デフォルト)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

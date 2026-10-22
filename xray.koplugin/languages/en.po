@@ -407,6 +407,9 @@ msgstr "Full Book Mode"
 msgid "gemini_key_hint"
 msgstr "Enter your free Gemini key from Google AI Studio (starts with AQ. or AIzaSy...):"
 
+msgid "highlight_menu_btn"
+msgstr "Highlight Menu"
+
 msgid "horizon_1"
 msgstr "1 Chapter Ahead"
 
@@ -1529,8 +1532,14 @@ msgstr "WELCOME TO X-RAY"
 msgid "xray_disabled_label"
 msgstr "Disabled"
 
-msgid "xray_enabled_label"
-msgstr "Enabled"
+msgid "xray_mode_about"
+msgstr "Controls how X-Ray integrates with text selection while reading:\n\n• [B]Button in Menu:[/B] Adds an 'X-Ray' button to KOReader's dictionary and highlight menus.\n• [B]Auto-Popup on Highlight:[/B] Immediately opens X-Ray when you select a word or name that has X-Ray data, skipping the highlight menu. If no X-Ray data matches, the regular menu is shown. Use the 'Highlight Menu' button inside the popup anytime to highlight or look up the word in the dictionary.\n• [B]Disabled:[/B] Hides in-text X-Ray lookup buttons."
+
+msgid "xray_mode_auto_popup_label"
+msgstr "Auto-Popup on Highlight"
+
+msgid "xray_mode_button_label"
+msgstr "Button in Menu (Default)"
 
 msgid "xray_mode_desc"
 msgstr "Adds an 'X-Ray' button to dictionary and selection menus for instant lookups."

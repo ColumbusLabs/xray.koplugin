@@ -134,6 +134,10 @@ function XRayPlugin:init()
     if self.ai_helper.settings and self.ai_helper.settings.xray_mode_enabled ~= nil then
         self.xray_mode_enabled = self.ai_helper.settings.xray_mode_enabled
     end
+    self.xray_auto_popup = false
+    if self.ai_helper.settings and self.ai_helper.settings.xray_auto_popup ~= nil then
+        self.xray_auto_popup = (self.ai_helper.settings.xray_auto_popup == true)
+    end
 
     -- Auto-fetch on chapter change (session state)
     self.last_auto_chapter = nil
@@ -240,6 +244,10 @@ function XRayPlugin:init()
                 show_func = function() return self.xray_mode_enabled end,
                 callback = self:_buildXRayDictButton(nil).callback,
             })
+        end
+
+        if self.mountHighlightHandler then
+            self:mountHighlightHandler()
         end
     end
     
@@ -396,6 +404,103 @@ function XRayPlugin:onDictButtonsReady(dict_popup, dict_buttons)
     end
 end
 
+function XRayPlugin:mountHighlightHandler()
+    local hl = self.ui and self.ui.highlight
+    if not hl or hl._xray_highlight_wrapped then return end
+    local plugin = self
+
+    local orig_show_menu = hl.onShowHighlightMenu
+    local orig_lookup_word = hl.lookupDictWord
+    hl._xray_orig_onShowHighlightMenu = orig_show_menu
+    hl._xray_orig_lookupDictWord = orig_lookup_word
+
+    hl.onShowHighlightMenu = function(hl_self, index)
+        if not index and not plugin._bypass_auto_popup and plugin:_tryAutoPopupHighlight(hl_self, "highlight_menu") then
+            return
+        end
+        if orig_show_menu then
+            return orig_show_menu(hl_self, index)
+        end
+    end
+
+    hl.lookupDictWord = function(hl_self, ...)
+        if not plugin._bypass_auto_popup and plugin:_tryAutoPopupHighlight(hl_self, "dict_word") then
+            return
+        end
+        if orig_lookup_word then
+            return orig_lookup_word(hl_self, ...)
+        end
+    end
+
+    hl._xray_highlight_wrapped = true
+end
+
+function XRayPlugin:_tryAutoPopupHighlight(hl_self, trigger_source)
+    if self.destroyed or not self.xray_mode_enabled or not self.xray_auto_popup or not self.lookup_manager then
+        return false
+    end
+
+    local sel = hl_self and hl_self.selected_text
+    if not sel or type(sel) ~= "table" then return false end
+    local text = sel.text
+    if type(text) ~= "string" or text == "" then return false end
+
+    local matches = self.lookup_manager:lookupAutoPopup(text)
+    if not matches or #matches == 0 then
+        return false
+    end
+
+    local function copyTable(t)
+        if type(t) ~= "table" then return t end
+        local res = {}
+        for k, v in pairs(t) do res[k] = v end
+        return res
+    end
+
+    local saved_state = {
+        selected_text = copyTable(hl_self.selected_text),
+        hold_pos = copyTable(hl_self.hold_pos),
+        selected_link = hl_self.selected_link,
+        selected_text_start_xpointer = hl_self.selected_text_start_xpointer,
+    }
+
+    local restore_menu_cb = function()
+        if self.destroyed or not self.ui or not self.ui.highlight then return end
+        local hl = self.ui.highlight
+        hl.selected_text = saved_state.selected_text
+        hl.hold_pos = saved_state.hold_pos
+        hl.selected_link = saved_state.selected_link
+        hl.selected_text_start_xpointer = saved_state.selected_text_start_xpointer
+        hl.is_word_selection = false
+        self._bypass_auto_popup = true
+        pcall(function()
+            if hl._xray_orig_onShowHighlightMenu then
+                hl._xray_orig_onShowHighlightMenu(hl)
+            elseif hl.onShowHighlightMenu then
+                hl:onShowHighlightMenu()
+            end
+        end)
+        self._bypass_auto_popup = false
+    end
+
+    if hl_self.clear then
+        pcall(function() hl_self:clear() end)
+    end
+    if self.ui and self.ui.handleEvent then
+        local ok_ev, Event = pcall(require, "ui/event")
+        if ok_ev and Event then
+            self.ui:handleEvent(Event:new("ClearSelection"))
+        end
+    end
+
+    self.lookup_manager:handleLookup(sel.text, sel.pos0, sel.pos1, {
+        from_auto_popup = true,
+        restore_menu_cb = restore_menu_cb,
+        candidates = matches,
+    })
+    return true
+end
+
 function XRayPlugin:log(msg)
     XRayLogger:log(msg)
 end
@@ -459,6 +564,7 @@ function XRayPlugin:onReaderReady()
         if self.destroyed or not self.ui or not self.ui.document then return end
         if self.mountUnderlineOverlay then self:mountUnderlineOverlay() end
         if self.mountTapHandler then self:mountTapHandler() end
+        if self.mountHighlightHandler then self:mountHighlightHandler() end
         
         -- Load cache immediately if available without doing a full scan
         if self.loadUnitCache and settings.unit_converter_enabled ~= false then
@@ -1348,7 +1454,9 @@ function XRayPlugin:autoLoadCache()
                 deathDate = cached_data.author_death
             }
         end
-        if #self.characters > 0 then self.xray_mode_enabled = true end
+        if #self.characters > 0 and (not self.ai_helper or not self.ai_helper.settings or self.ai_helper.settings.xray_mode_enabled ~= false) then
+            self.xray_mode_enabled = true
+        end
 
         -- Synchronize loaded book data to SeriesCache if part of a series
         if self.series_manager and (cached_data.series_slug or cached_data.series or cached_data.series_name or (self.ui and self.ui.document)) then

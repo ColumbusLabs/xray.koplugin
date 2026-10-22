@@ -541,6 +541,10 @@ msgstr "Vollständiger Buch-Modus"
 msgid "gemini_key_hint"
 msgstr "Geben Sie Ihren kostenlosen Gemini-Schlüssel aus Google AI Studio ein (beginnt mit AQ. oder AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Markierungsmenü"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 Kapitel voraus"
@@ -2037,9 +2041,17 @@ msgstr "WILLKOMMEN BEI X-RAY"
 msgid "xray_disabled_label"
 msgstr "Deaktiviert"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Aktiviert"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Steuert die Integration von X-Ray bei der Textauswahl während des Lesens:\n\n• [B]Schaltfläche im Menü:[/B] Fügt ein 'X-Ray'-Symbol zu den Wörterbuch- und Markierungsmenüs von KOReader hinzu.\n• [B]Automatisches Popup bei Markierung:[/B] Öffnet sofort X-Ray, wenn Sie ein Wort oder einen Namen mit X-Ray-Daten auswählen, ohne das Markierungsmenü anzuzeigen. Wenn keine X-Ray-Daten gefunden werden, erscheint das normale Menü. Nutzen Sie die Schaltfläche 'Markierungsmenü' im Popup, um das Wort wie gewohnt zu markieren oder im Wörterbuch nachzuschlagen.\n• [B]Deaktiviert:[/B] Blendet die X-Ray-Suchschaltflächen im Text aus."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Automatisches Popup bei Markierung"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Schaltfläche im Menü (Standard)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

@@ -541,6 +541,10 @@ msgstr "Mode Buku Penuh"
 msgid "gemini_key_hint"
 msgstr "Masukkan kunci Gemini gratis dari Google AI Studio (dimulai dengan AQ. atau AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Menu Sorotan"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 Bab Ke Depan"
@@ -2037,9 +2041,17 @@ msgstr "SELAMAT DATANG DI X-RAY"
 msgid "xray_disabled_label"
 msgstr "Dinonaktifkan"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Diaktifkan"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Mengontrol integrasi X-Ray dengan seleksi teks saat membaca:\n\n• [B]Tombol di Menu:[/B] Menambahkan tombol 'X-Ray' ke menu kamus dan sorotan KOReader.\n• [B]Pop-up Otomatis saat Sorot:[/B] Langsung membuka X-Ray saat Anda menyeleksi kata atau nama yang memiliki data X-Ray, melewati menu sorotan. Jika tidak ada data X-Ray, menu biasa akan muncul. Gunakan tombol 'Menu Sorotan' di dalam pop-up kapan saja untuk menyorot atau mencari kata di kamus.\n• [B]Dinonaktifkan:[/B] Menyembunyikan tombol pencarian X-Ray dalam teks."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Pop-up Otomatis saat Sorot"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Tombol di Menu (Bawaan)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

@@ -541,6 +541,10 @@ msgstr "Volledig boek modus"
 msgid "gemini_key_hint"
 msgstr "Voer uw gratis Gemini-sleutel van Google AI Studio in (begint met AQ. of AIzaSy...):"
 
+# en-hash: e743adccf6972021e1bbf252702394d8
+msgid "highlight_menu_btn"
+msgstr "Markeringsmenu"
+
 # en-hash: f850d33c4743163bf7e06b8fde0855a6
 msgid "horizon_1"
 msgstr "1 hoofdstuk vooruit"
@@ -2037,9 +2041,17 @@ msgstr "WELKOM BIJ X-RAY"
 msgid "xray_disabled_label"
 msgstr "Uitgeschakeld"
 
-# en-hash: 00d23a76e43b46dae9ec7aa9dcbebb32
-msgid "xray_enabled_label"
-msgstr "Ingeschakeld"
+# en-hash: f985e0d7d99a942354d25b3ca82e2dbd
+msgid "xray_mode_about"
+msgstr "Beheert hoe X-Ray integreert met tekstselectie tijdens het lezen:\n\n• [B]Knop in menu:[/B] Voegt een 'X-Ray'-knop toe aan de woordenboek- en markeringsmenu's van KOReader.\n• [B]Automatische pop-up bij markering:[/B] Opent direct X-Ray bij selectie van een woord of naam met X-Ray-gegevens, waarbij het markeringsmenu wordt overgeslagen. Als er geen gegevens zijn, verschijnt het normale menu. Gebruik de 'Markeringsmenu'-knop in de pop-up om alsnog te markeren of op te zoeken in het woordenboek.\n• [B]Uitgeschakeld:[/B] Verbergt de X-Ray-zoekknoppen in de tekst."
+
+# en-hash: 9c80703132b544548dbcfcf70e216f38
+msgid "xray_mode_auto_popup_label"
+msgstr "Automatische pop-up bij markering"
+
+# en-hash: eeb0673b42314cc5bb1f98be372c9eda
+msgid "xray_mode_button_label"
+msgstr "Knop in menu (Standaard)"
 
 # en-hash: aa3045baed0aad489f96655b14b671ac
 msgid "xray_mode_desc"

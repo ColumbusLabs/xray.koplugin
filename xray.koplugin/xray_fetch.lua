@@ -3121,8 +3121,14 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
     end
 
     -- 5. Timeline Event
-    if delta_data.timeline_event and delta_data.timeline_event.event and delta_data.timeline_event.event ~= "" then
-        local ev_title = delta_data.timeline_event.chapter or ch_title
+    -- The batch prompt returns timeline_event as a plain string, the
+    -- per-chapter prompt as { chapter = ..., event = ... }. Accept both.
+    local timeline_ev = delta_data.timeline_event
+    if type(timeline_ev) == "string" then
+        timeline_ev = { event = timeline_ev }
+    end
+    if type(timeline_ev) == "table" and type(timeline_ev.event) == "string" and timeline_ev.event ~= "" then
+        local ev_title = timeline_ev.chapter or ch_title
         local already_has_ev = false
         for _, ev in ipairs(self.timeline) do
             if ev.chapter == ev_title and ((ev.page and ch_page and ev.page == ch_page) or (ev.chapter_index and ev.chapter_index == chapter_idx)) then
@@ -3134,7 +3140,7 @@ function M:mergeSequentialChapterDelta(delta_data, chapter, chapter_idx, skip_ch
             new_events = new_events + 1
             table.insert(self.timeline, {
                 chapter = ev_title,
-                event = delta_data.timeline_event.event,
+                event = timeline_ev.event,
                 chapter_index = chapter_idx,
                 page = ch_page
             })
